@@ -555,15 +555,32 @@ def add_block() -> Tuple[Response, int]:
         print(message)
         return jsonify({"message": message}), 400
 
-    data: (
-        List[str | Dict[str, TransactionDict]]) = request.get_json().get("data")
-    if not data:
-        message = "Data is required."
+    try:
+        request_data: Any = request.get_json()
+    except Exception as e:
+        message = f"Request data could not be retrieved: {e}"
         print(message)
         return jsonify({"message": message}), 400
+    print(f"Request: {request.get_json()}")
+    if "data" not in request_data:
+        message = "'data' key not found in request."
+        print(message)
+        return jsonify({"message": message}), 400
+    data = request.get_json().get("data")
+    if not data:
+        message = "The 'data' key is empty."
+        print(message)
+        return jsonify({"message": message}), 400
+    # IMPROVE Make data a named tuple?
+    if not isinstance(data, list) and (
+            all(isinstance(item, (str, dict)) for item in data)):
+        message = "Data must be a list of strings or dictionaries."
+        print(message)
+        return jsonify({"message": message}), 400
+    data_cast: List[str | Dict[str, TransactionDict]] = data
 
-    blockchain.add_block(data)
     try:
+        blockchain.add_block(data_cast)
         last_block: None | Block = blockchain.get_last_block()
         if last_block and last_block.data != data:
             message = "Block could not be added."
