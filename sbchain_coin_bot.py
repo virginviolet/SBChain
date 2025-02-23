@@ -42,9 +42,9 @@ from _collections_abc import dict_items
 from typing import (Dict, KeysView, List, LiteralString, NoReturn, TextIO, cast,
                     Literal, Any)
 from sbchain_coin_bot_types import (BotConfig, Reels, ReelSymbol,
-                                              ReelResult, ReelResults,
-                                              SpinEmojis, SlotMachineConfig,
-                                              SaveData)
+                                    ReelResult, ReelResults,
+                                    SpinEmojis, SlotMachineConfig,
+                                    SaveData)
 # endregion
 
 # region Bot setup
@@ -1609,34 +1609,35 @@ class UserSaveData:
             self._has_visited_casino = False
             self.create()
         else:
-            starting_bonus_available: str | List[int] | bool | float | None = (
-                self.load("starting_bonus_available"))
-            if isinstance(starting_bonus_available, (bool, float)):
-                self._starting_bonus_available = starting_bonus_available
-            elif starting_bonus_available is None:
-                print("Value of 'starting_bonus_available' is None. "
-                      "Setting to True.")
-                self._starting_bonus_available = True
-            else:
-                print("ERROR: Value of 'starting_bonus_available' "
-                      "is not a boolean or float. Setting to False.")
-                self._starting_bonus_available = False
+            self._starting_bonus_available = (
+                self._load_starting_bonus_available())
+            self._has_visited_casino = self._load_has_visited_casino()
 
+    def _load_starting_bonus_available(self) -> bool | float:
+        """
+        Loads the starting bonus availability status from the JSON file.
+        """
+        value: str | List[int] | bool | float | None = (
+            self.load("starting_bonus_available"))
+        if isinstance(value, (bool, float)):
+            return value
+        elif value is None:
+            # Occurs if the key is missing, I think.
+            print("Value of 'starting_bonus_available' is None. "
+                  "Setting to True.")
+            return True
+        else:
+            print("ERROR: Value of 'starting_bonus_available' "
+                  "is not a boolean or float. Setting to False.")
+            return False
 
     @property
     def starting_bonus_available(self) -> bool | float:
         """
         Indicates if they can receive a starting bonus.
         """
-        value: str | List[int] | bool | float | None = (
-            self.load("starting_bonus_available"))
-        if isinstance(value, (bool, float)):
-            return value
-        else:
-            print("ERROR: Value of 'starting_bonus_available' "
-                  "is not a boolean or float. Setting to False.")
-            return False
-    
+        return self._load_starting_bonus_available()
+
     @starting_bonus_available.setter
     def starting_bonus_available(self, value: bool | float) -> None:
         """
@@ -1645,18 +1646,32 @@ class UserSaveData:
         self._starting_bonus_available = value
         self.save("starting_bonus_available", value)
 
+    def _load_has_visited_casino(self) -> bool:
+        """
+        Loads the casino visit status from the JSON file.
+        """
+        value: str | List[int] | bool | float | None = (
+            self.load("has_visited_casino"))
+        return_value: bool
+        if isinstance(value, bool):
+            return value
+        elif value is None:
+            return_value = False
+            print("Value of 'has_visited_casino' is None. "
+                  f"Setting to {return_value}.")
+            return return_value
+        else:
+            return_value = False
+            print("ERROR: Value of 'has_visited_casino' is not a boolean. "
+                  f"Setting to {return_value}.")
+            return return_value
+
     @property
     def has_visited_casino(self) -> bool:
         """
         Indicates if the user has visited the casino.
         """
-        value: str | List[int] | bool | float | None = self.load("has_visited_casino")
-        if isinstance(value, bool):
-            return value
-        else:
-            print("ERROR: Value of 'has_visited_casino' is not a boolean. "
-                  "Setting to False.")
-            return False
+        return self._load_has_visited_casino()
 
     @has_visited_casino.setter
     def has_visited_casino(self, value: bool) -> None:
@@ -1709,7 +1724,7 @@ class UserSaveData:
             key: The key to be saved.
             value: The value to be saved.
         """
-        
+
         # Read the existing data
         save_data: SaveData
         with open(self.file_name, "r") as file:
@@ -1738,11 +1753,11 @@ class UserSaveData:
             all_data = json.load(file)
         requested_value: str | List[int] | None = all_data.get(key)
         if ((isinstance(requested_value, str)) and
-            (requested_value.lower() == "true")):
+                (requested_value.lower() == "true")):
             return True
         elif (
             (isinstance(requested_value, str)) and
-            (requested_value.lower() == "false")):
+                (requested_value.lower() == "false")):
             return False
         else:
             return requested_value
@@ -2041,7 +2056,7 @@ class SlotMachineView(View):
             text_row_1=self.message_text_row_1,
             text_row_2=self.message_text_row_2,
             reels_row=self.message_reels_row)
-    
+
     # stop_button_callback
     async def on_button_click(self,
                               interaction: Interaction,
@@ -2200,6 +2215,7 @@ def invoke_bot_configuration() -> None:
     casino_house_id = configuration.casino_house_id
     administrator_id = configuration.administrator_id
     print("Bot configuration loaded.")
+
 
 def reinitialize_slot_machine() -> None:
     """
@@ -2614,6 +2630,7 @@ def format_coin_label(number: int) -> str:
         return coins
 # endregion
 
+
 # region Global variables
 coin: str = ""
 Coin: str = ""
@@ -2721,7 +2738,7 @@ async def on_message(message: Message) -> None:
         # the all_channel_checkpoints dictionary for this new channel.
         guild: Guild | None = message.guild
         if guild is None:
-            # TODO Check if checkpoints work in threads
+            # TODO Ensure checkpoints work threads
             # print("ERROR: Guild is None.")
             # administrator: str = (
             #     (await bot.fetch_user(administrator_id)).mention)
@@ -2732,7 +2749,7 @@ async def on_message(message: Message) -> None:
         guild_id: int = guild.id
         channel = message.channel
         if ((isinstance(channel, TextChannel)) or
-            isinstance(channel, VoiceChannel)):
+                isinstance(channel, VoiceChannel)):
             channel_name: str = channel.name
             all_channel_checkpoints[channel_id] = ChannelCheckpoints(
                 guild_name=guild_name,
@@ -2977,15 +2994,15 @@ async def reels(interaction: Interaction,
     new_reels: Reels = slot_machine.reels
     if add_symbol and remove_symbol:
         await interaction.followup.send("You can only add or remove a "
-                                                "symbol at a time.",
-                                                ephemeral=True)
+                                        "symbol at a time.",
+                                        ephemeral=True)
         return
     if add_symbol and reel is None:
         if amount % 3 != 0:
             await interaction.followup.send("The amount of symbols to "
-                                                    "add must be a multiple "
-                                                    "of 3.",
-                                                    ephemeral=True)
+                                            "add must be a multiple "
+                                            "of 3.",
+                                            ephemeral=True)
             return
     elif add_symbol and reel:
         print(f"Adding symbol: {add_symbol}")
@@ -3390,14 +3407,14 @@ async def slots(interaction: Interaction,
         seconds_left = int(starting_bonus_available - time())
         time_left: str = format_timespan(seconds_left)
         message = (f"You are out of {Coins}. Come back in {time_left} "
-                "to get some coins.")
+                   "to get some coins.")
         await interaction.response.send_message(message, ephemeral=True)
         del message
         active_slot_machine_players.remove(user_id)
         return
     elif user_balance <= 0 and starting_bonus_available is False:
         starting_bonus_available = True
-    
+
     should_give_bonus: bool = (
         (starting_bonus_available == True) or
         ((isinstance(starting_bonus_available, float)) and
@@ -3418,9 +3435,9 @@ async def slots(interaction: Interaction,
                                 f"Roll the die and we will give you a bonus.")
         else:
             message_preamble = (f"Welcome to the {Coin} Casino! This seems "
-                              "to be your first time here.\n"
-                              "A standard 6-sided die will decide your "
-                              "starting bonus.")
+                                "to be your first time here.\n"
+                                "A standard 6-sided die will decide your "
+                                "starting bonus.")
         # TODO Move the table to a separate message
         message: str = (f"{message_preamble}\n"
                         "The possible outcomes are displayed below.\n\n"
@@ -3439,7 +3456,7 @@ async def slots(interaction: Interaction,
         if user_id in active_slot_machine_players:
             active_slot_machine_players.remove(user_id)
         return
-    
+
     if user_balance < wager_int:
         coin_label_w: str = format_coin_label(wager_int)
         coin_label_b: str = format_coin_label(user_balance)
@@ -3755,7 +3772,7 @@ async def slots(interaction: Interaction,
     coins_left: int = user_balance + net_return
     if coins_left <= 0 and starting_bonus_available is False:
         next_bonus_time_left: str = format_timespan(
-            slot_machine.next_bonus_wait_seconds) 
+            slot_machine.next_bonus_wait_seconds)
         invoker: str = user.mention
         message: str = (f"{invoker} You're all out of {coins}!\n"
                         f"Come back in {next_bonus_time_left} "
@@ -3773,6 +3790,7 @@ async def slots(interaction: Interaction,
 
     if last_block_error:
         # send message to admin
+        administrator: str = (await bot.fetch_user(administrator_id)).name
         await interaction.response.send_message("An error occurred. "
                                                 f"{administrator} pls fix.")
         await terminate_bot()
