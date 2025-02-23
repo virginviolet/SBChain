@@ -3,5 +3,12 @@ __pycache__/
 data/transactions.tsv
 data/blockchain.json
 data/transactions.log
+data/slot_machine.json
 
 data/checkpoints/
+data/save_data/
+guild_ids.txt
+*.bak*
+*.7z
+*.zip
+*.tsv
