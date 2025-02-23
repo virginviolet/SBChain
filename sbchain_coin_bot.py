@@ -1,3 +1,17 @@
+"""
+Scopes:
+- applications.commands
+- bot
+
+Permissions:
+- Send Messages
+- Read Message History
+
+Privileged Gateway Intents:
+- Server Members Intent
+- Message Content Intent
+"""
+
 # region Imports
 import sbchain
 import threading
@@ -2707,11 +2721,12 @@ async def on_message(message: Message) -> None:
         # the all_channel_checkpoints dictionary for this new channel.
         guild: Guild | None = message.guild
         if guild is None:
-            print("ERROR: Guild is None.")
-            administrator: str = (
-                (await bot.fetch_user(administrator_id)).mention)
-            await message.channel.send("An error occurred. "
-                                       f"{administrator} pls fix.")
+            # TODO Check if checkpoints work in threads
+            # print("ERROR: Guild is None.")
+            # administrator: str = (
+            #     (await bot.fetch_user(administrator_id)).mention)
+            # await message.channel.send("An error occurred. "
+            #                            f"{administrator} pls fix.")
             return
         guild_name: str = guild.name
         guild_id: int = guild.id
