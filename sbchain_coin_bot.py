@@ -3369,16 +3369,8 @@ async def slots(interaction: Interaction,
     user_id_hash: str = sha256(str(user_id).encode()).hexdigest()
     user_balance: int | None = blockchain.get_balance(user=user_id_hash)
     if user_balance is None:
-        # Would happen if the blockchain is deleted but not the save data
-        administrator: str = (
-            (await bot.fetch_user(administrator_id)).mention)
-        message = ("This is odd. It appears you do not have an account.\n"
-                   f"{administrator} should look into this.")
-        await interaction.response.send_message(content=message)
-        del message
-        if user_id in active_slot_machine_players:
-            active_slot_machine_players.remove(user_id)
-        return
+        user_balance = 0
+        starting_bonus_available = True
     elif user_balance <= 0 and time() < starting_bonus_available:
         seconds_left = int(starting_bonus_available - time())
         time_left: str = format_timespan(seconds_left)
@@ -3391,8 +3383,6 @@ async def slots(interaction: Interaction,
     elif user_balance <= 0 and starting_bonus_available is False:
         starting_bonus_available = True
     
-    print(f"user_balance: {user_balance}")
-    print(f"time() < starting_bonus_available: {time() < starting_bonus_available}")
     should_give_bonus: bool = (
         (starting_bonus_available == True) or
         ((isinstance(starting_bonus_available, float)) and
