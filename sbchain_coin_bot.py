@@ -2546,6 +2546,7 @@ async def process_reaction(message_id: int,
                          TextChannel | CategoryChannel | Thread |
                          PrivateChannel |
                          None) = bot.get_channel(casino_channel_id)
+        user_message: Message = await channel.fetch_message(message_id)
         if isinstance(casino_channel, PrivateChannel):
             print("ERROR: Casino channel is a private channel.")
             return
@@ -2554,21 +2555,16 @@ async def process_reaction(message_id: int,
             return
         casino_channel_mention: str = casino_channel.mention
         sender_mention: str = sender.mention
-        sender_display_name: str = sender.display_name
-        receiver_mention: str = receiver.mention
-        message: str = (f"{receiver_mention} {sender_display_name} has mined "
-                        f"a {coin} for you!\n"
-                        "You can mine coins for others "
-                        f"by reacting {coin_emoji} to their message.\n"
-                        "\n"
-                        "You can check your balance at any time "
-                        "by typing `/balance` in the chat.\n"
-                        "\n"
-                        "You are also welcome to try the slot machines "
-                        f"in {casino_channel_mention}. "
-                        f"They only take {coin}.\n"
-                        f"-# You will only receive this message once.")
-        await channel.send(message)
+        message: str = (f"-# {sender_mention} has "
+                        f"mined a {coin} for you! "
+                        f"You should come visit the {casino_channel_mention} "
+                        f"some time. Check you balance with `/balance`. "
+                        "If you also want to mine a coin for someone, simply "
+                        f"react {coin_emoji} to their message. "
+                        "Oh, and don't worry, I only inform people "
+                        f"about {coin} once.")
+        await user_message.reply(message, allowed_mentions=AllowedMentions.none())
+        del user_message
         del message
         del channel
         del channel_id
