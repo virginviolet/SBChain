@@ -28,7 +28,7 @@ from humanfriendly import format_timespan
 from discord import (Guild, Intents, Interaction, Member, Message, Client,
                      Emoji, PartialEmoji, Role, User, TextChannel, VoiceChannel,
                      app_commands, utils, CategoryChannel, ForumChannel,
-                     StageChannel, Thread)
+                     StageChannel, Thread, AllowedMentions)
 from discord.abc import PrivateChannel
 from discord.ui import View, Button
 from discord.ext import commands
@@ -3030,10 +3030,10 @@ async def balance(interaction: Interaction,
     """
     user_to_check: str
     if user is None:
-        user_to_check = interaction.user.display_name
+        user_to_check = interaction.user.mention
         user_id: int = interaction.user.id
     else:
-        user_to_check = user.display_name
+        user_to_check = user.mention
         user_id: int = user.id
 
     # print(f"Getting balance for user {user_to_check} ({user_id})...")
@@ -3050,7 +3050,8 @@ async def balance(interaction: Interaction,
     else:
         coin_label: str = format_coin_label(balance)
         message = f"{user_to_check} has {balance} {coin_label}."
-    await interaction.response.send_message(message, ephemeral=incognito)
+    await interaction.response.send_message(
+        message, ephemeral=incognito, allowed_mentions=AllowedMentions.none())
     del user_id
     del balance
     del message
