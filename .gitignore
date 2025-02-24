@@ -12,3 +12,4 @@ guild_ids.txt
 *.7z
 *.zip
 *.tsv
+*_production.*
