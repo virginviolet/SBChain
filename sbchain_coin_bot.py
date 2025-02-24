@@ -27,7 +27,9 @@ from datetime import datetime
 from humanfriendly import format_timespan
 from discord import (Guild, Intents, Interaction, Member, Message, Client,
                      Emoji, PartialEmoji, Role, User, TextChannel, VoiceChannel,
-                     app_commands, utils)
+                     app_commands, utils, CategoryChannel, ForumChannel,
+                     StageChannel, Thread)
+from discord.abc import PrivateChannel
 from discord.ui import View, Button
 from discord.ext import commands
 from discord.raw_models import RawReactionActionEvent
@@ -405,10 +407,14 @@ class BotConfiguration:
                 self.Coins = str(self.configuration["Coins"])
                 self.coin_emoji_id: int = (
                     int(str(self.configuration["coin_emoji_id"])))
+                self.coin_emoji_name: str = (
+                    str(self.configuration["coin_emoji_name"]))
                 self.administrator_id: int = (
                     int(str(self.configuration["administrator_id"])))
                 self.casino_house_id: int = (
                     int(str(self.configuration["casino_house_id"])))
+                self.casino_channel_id: int = (
+                    int(str(self.configuration["casino_channel_id"])))
                 attributes_set = True
             except KeyError as e:
                 print(f"ERROR: Missing key in bot configuration: {e}\n"
@@ -419,12 +425,21 @@ class BotConfiguration:
                 str(self.configuration["administrator_id"]))
             self.casino_house_id: int = int(
                 str(self.configuration["casino_house_id"]))
+        # IMPROVE DRY
         if self.coin_emoji_id == 0:
             print("WARNING: `coin_emoji_id` has not set "
                   "in bot_configuration.json nor "
                   "in the environment variables.")
+        if self.coin_emoji_name == "":
+            print("WARNING: `coin_emoji_name` has not set "
+                  "in bot_configuration.json nor "
+                  "in the environment variables.")
         if self.administrator_id == 0:
             print("WARNING: `administrator_id` has not been set "
+                  f"in '{self.file_name}' nor "
+                  "in the environment variables.")
+        if self.casino_channel_id == 0:
+            print("WARNING: `casino_channel_id` has not been set "
                   f"in '{self.file_name}' nor "
                   "in the environment variables.")
         print(f"Bot configuration initialized.")
@@ -463,8 +478,10 @@ class BotConfiguration:
             "coins": "coins",
             "Coins": "Coins",
             "coin_emoji_id": "0",
+            "coin_emoji_name": "",
             "casino_house_id": "0",
-            "administrator_id": "0"
+            "administrator_id": "0",
+            "casino_channel_id": "0"
         }
         # Save the configuration to the file
         with open(self.file_name, "w") as file:
@@ -493,8 +510,10 @@ class BotConfiguration:
                 "coins": "coins",
                 "Coins": "Coins",
                 "coin_emoji_id": "coin_emoji_id",
+                "coin_emoji_name": "coin_emoji_name",
                 "casino_house_id": "casino_house_id",
-                "administrator_id": "administrator_id"
+                "administrator_id": "administrator_id",
+                "casino_channel_id": "casino_channel_id"
             }
             # TODO Add reels env vars
 
@@ -1604,14 +1623,19 @@ class UserSaveData:
         self.file_name: str = f"data/save_data/{user_id}/save_data.json"
         self._starting_bonus_available: bool | float
         self._has_visited_casino: bool
+        self._reaction_message_received: bool
         if not exists(self.file_name):
             self._starting_bonus_available = True
             self._has_visited_casino = False
+            self._reaction_message_received = False
             self.create()
         else:
             self._starting_bonus_available = (
                 self._load_starting_bonus_available())
             self._has_visited_casino = self._load_has_visited_casino()
+            self._reaction_message_received = (
+                self._load_reaction_message_received()
+            )
 
     def _load_starting_bonus_available(self) -> bool | float:
         """
@@ -1681,6 +1705,41 @@ class UserSaveData:
         self._has_visited_casino = value
         self.save("has_visited_casino", value)
 
+    def _load_reaction_message_received(self) -> bool:
+        """
+        Loads the reaction message status from the JSON file.
+        """
+        value: str | List[int] | bool | float | None = (
+            self.load("reaction_message_received"))
+        return_value: bool
+        if isinstance(value, bool):
+            return value
+        elif value is None:
+            return_value = False
+            print("Value of 'reaction_message_received' is None. "
+                  f"Setting to {return_value}.")
+            return return_value
+        else:
+            return_value = True
+            print("ERROR: Value of 'reaction_message_received' "
+                  f"is not a boolean. Setting to {return_value}.")
+            return return_value
+
+    @property
+    def reaction_message_received(self) -> bool:
+        """
+        Indicates if the user has received the reaction message.
+        """
+        return self._load_reaction_message_received()
+
+    @reaction_message_received.setter
+    def reaction_message_received(self, value: bool) -> None:
+        """
+        Sets the status of the user receiving the reaction message.
+        """
+        self._reaction_message_received = value
+        self.save("reaction_message_received", value)
+
     def create(self) -> None:
         """
         Creates the necessary directories and files for the user.
@@ -1710,7 +1769,8 @@ class UserSaveData:
                         "starting_bonus_available": (
                             self._starting_bonus_available),
                         "has_visited_casino": False,
-                        "messages_mined": []
+                        "messages_mined": [],
+                        "reaction_message_received": False
                     }
                     file_contents_json: str = json.dumps(file_contents)
                     file.write(file_contents_json)
@@ -2205,15 +2265,18 @@ def invoke_bot_configuration() -> None:
     """
     print("Loading bot configuration...")
     global configuration, coin, Coin, coins, Coins, coin_emoji_id
-    global casino_house_id, administrator_id, slot_machine
+    global coin_emoji_name, casino_house_id, administrator_id, slot_machine
+    global casino_channel_id
     configuration = BotConfiguration()
     coin = configuration.coin
     Coin = configuration.Coin
     coins = configuration.coins
     Coins = configuration.Coins
     coin_emoji_id = configuration.coin_emoji_id
+    coin_emoji_name = configuration.coin_emoji_name
     casino_house_id = configuration.casino_house_id
     administrator_id = configuration.administrator_id
+    casino_channel_id = configuration.casino_channel_id
     print("Bot configuration loaded.")
 
 
@@ -2359,7 +2422,8 @@ async def process_reaction(message_id: int,
                            emoji: PartialEmoji | Emoji | str,
                            sender: Member | User,
                            receiver: Member | User | None = None,
-                           receiver_id: int | None = None) -> None:
+                           receiver_id: int | None = None,
+                           channel_id: int | None = None) -> None:
     """
     Processes a reaction event to mine a coin for a receiver.
 
@@ -2447,6 +2511,69 @@ async def process_reaction(message_id: int,
 
         if chain_validity is False:
             await terminate_bot()
+
+        # Inform receiver if it's the first time they receive a coin
+        # Do not pass the channel_id if you do not want to send message
+        # (like perhaps when scraping old messages)
+        if channel_id is None:
+            return
+        if ((coin == "coin") or
+            (coin_emoji_id == 0) or
+            (coin_emoji_name == "") or
+            (casino_channel_id == 0)):
+            print("WARNING: Skipping reaction message because "
+                  "bot configuration is incomplete.")
+            print(f"coin_emoji_id: {coin_emoji_id}")
+            print(f"coin_emoji_name: {coin_emoji_name}")
+            print(f"casino_channel_id: {casino_channel_id}")
+            print(f"casino_channel: {casino_channel_id}")
+            return
+        receiver_name: str = receiver.name
+        save_data_receiver: UserSaveData = UserSaveData(
+            user_id=receiver_id, user_name=receiver_name)
+        del receiver_name
+        informed_about_coin_reactions: bool = (
+            save_data_receiver.reaction_message_received)
+        if informed_about_coin_reactions:
+            return
+        channel: (VoiceChannel | StageChannel | ForumChannel | TextChannel |
+            CategoryChannel | Thread | PrivateChannel | None) = (
+            bot.get_channel(channel_id))
+        if not isinstance(channel, (VoiceChannel, TextChannel, Thread)):
+            return
+        coin_emoji = PartialEmoji(name=coin_emoji_name, id=coin_emoji_id)
+        casino_channel: (VoiceChannel | StageChannel | ForumChannel |
+                         TextChannel | CategoryChannel | Thread |
+                         PrivateChannel |
+                         None) = bot.get_channel(casino_channel_id)
+        if isinstance(casino_channel, PrivateChannel):
+            print("ERROR: Casino channel is a private channel.")
+            return
+        elif casino_channel is None:
+            print("ERROR: Casino channel is None.")
+            return
+        casino_channel_mention: str = casino_channel.mention
+        sender_mention: str = sender.mention
+        sender_display_name: str = sender.display_name
+        receiver_mention: str = receiver.mention
+        message: str = (f"{receiver_mention} {sender_display_name} has mined "
+                        f"a {coin} for you!\n"
+                        "You can mine coins for others "
+                        f"by reacting {coin_emoji} to their message.\n"
+                        "\n"
+                        "You can check your balance at any time "
+                        "by typing `/balance` in the chat.\n"
+                        "\n"
+                        "You are also welcome to try the slot machines "
+                        f"in {casino_channel_mention}. "
+                        f"They only take {coin}.\n"
+                        f"-# You will only receive this message once.")
+        await channel.send(message)
+        del message
+        del channel
+        del channel_id
+        del sender_mention
+        save_data_receiver.reaction_message_received = True
 # endregion
 
 # region Get timestamp
@@ -2637,9 +2764,11 @@ Coin: str = ""
 coins: str = ""
 Coins: str = ""
 coin_emoji_id: int = 0
+coin_emoji_name: str = ""
 casino_house_id: int = 0
 administrator_id: int = 0
 all_channel_checkpoints: Dict[int, ChannelCheckpoints] = {}
+casino_channel_id: int = 0
 # endregion
 
 # region Flask
@@ -2791,10 +2920,13 @@ async def on_raw_reaction_add(payload: RawReactionActionEvent) -> None:
             return
         receiver_user_id: int = payload.message_author_id
         message_id: int = payload.message_id
+        channel_id: int = payload.channel_id
+
         await process_reaction(message_id=message_id,
                                emoji=payload.emoji,
                                sender=sender,
-                               receiver_id=receiver_user_id)
+                               receiver_id=receiver_user_id,
+                               channel_id=channel_id)
         del receiver_user_id
         del sender
         del message_id

@@ -8,8 +8,10 @@ class BotConfig(TypedDict):
     coins: str
     Coins: str
     coin_emoji_id: str
+    coin_emoji_name: str
     casino_house_id: str
     administrator_id: str
+    casino_channel_id: str
 
 
 class Reels(TypedDict):
@@ -62,3 +64,4 @@ class SaveData(TypedDict):
     starting_bonus_available: bool | float
     messages_mined: List[int]
     has_visited_casino: bool
+    reaction_message_received: bool
