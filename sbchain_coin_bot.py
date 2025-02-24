@@ -3101,7 +3101,7 @@ async def reels(interaction: Interaction,
 
         inspect: Doesn't do anything.
     """
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=close_off)
     # Check if user has the necessary role
     invoker: User | Member = interaction.user
     invoker_roles: List[Role] = cast(Member, invoker).roles
@@ -3288,7 +3288,7 @@ async def reels(interaction: Interaction,
                        "a given wager")
 async def slots(interaction: Interaction,
                 insert_coins: int | None = None,
-                private_room: bool = False,
+                private_room: bool | None = None,
                 jackpot: bool = False,
                 reboot: bool = False,
                 show_help: bool = False,
@@ -3456,9 +3456,17 @@ async def slots(interaction: Interaction,
             "\n"
             "-# *Not guaranteed. Actually, for legal reasons, nothing about "
             "this game is guaranteed.\n")
-        await interaction.response.send_message(help_message_1, ephemeral=True)
-        await interaction.followup.send(help_message_2, ephemeral=True)
-        await interaction.followup.send(help_message_3, ephemeral=True)
+        # Allow public message, but default to ephemeral
+        if private_room is False:
+            should_use_ephemeral = False
+        else:
+            should_use_ephemeral = True
+        await interaction.response.send_message(help_message_1,
+                                                ephemeral=should_use_ephemeral)
+        await interaction.followup.send(help_message_2,
+                                        ephemeral=should_use_ephemeral)
+        await interaction.followup.send(help_message_3,
+                                        ephemeral=should_use_ephemeral)
         return
     elif rtp:
         wager_int = rtp
@@ -3477,14 +3485,26 @@ async def slots(interaction: Interaction,
                 rtp_display = f"<{lowest_number_float}%"
         message = slot_machine.make_message(
             f"-# RTP (stake={wager_int} {coins}): {rtp_display}")
-        await interaction.response.send_message(message, ephemeral=True)
+        if private_room is False:
+            should_use_ephemeral = False
+        else:
+            should_use_ephemeral = True
+        print(f"private_room: {private_room}")
+        print(f"should_use_ephemeral: {should_use_ephemeral}")
+        await interaction.response.send_message(message,
+                                                ephemeral=should_use_ephemeral)
         return
     elif reboot:
         message = slot_machine.make_message(
             f"-# The {Coin} slot machine is restarting..."
         )
+        # Allow ephemeral messages, but default to public
+        if private_room is True:
+            should_use_ephemeral = True
+        else:
+            should_use_ephemeral = False
         await interaction.response.send_message(message,
-                                                ephemeral=private_room)
+                                                ephemeral=should_use_ephemeral)
         del message
         await asyncio.sleep(4)
         # Re-initialize slot machine (reloads configuration from file)
@@ -3509,8 +3529,18 @@ async def slots(interaction: Interaction,
                    f"-# JACKPOT: {jackpot_pool} "
                    f"{coin_label}.")
         del coin_label
-        await interaction.response.send_message(message, ephemeral=private_room)
+        if private_room is True:
+            should_use_ephemeral = True
+        else:
+            should_use_ephemeral = False
+        await interaction.response.send_message(message,
+                                                ephemeral=should_use_ephemeral)
         return
+
+    if private_room:
+        should_use_ephemeral = True
+    else:
+        should_use_ephemeral = False
 
     # Check if user is already playing on a slot machine
     if user_id in active_slot_machine_players:
@@ -3660,7 +3690,7 @@ async def slots(interaction: Interaction,
                                         interaction=interaction)
     await interaction.response.send_message(content=slots_message,
                                             view=slot_machine_view,
-                                            ephemeral=private_room)
+                                            ephemeral=should_use_ephemeral)
     del slots_message
     # Auto-stop reel timer
     # Views have built-in timers that you can wait for with the wait() method,
@@ -3909,7 +3939,8 @@ async def slots(interaction: Interaction,
                         f"Come back in {next_bonus_time_left} "
                         "for a new starting bonus.")
         del next_bonus_time_left
-        await interaction.followup.send(content=message, ephemeral=private_room)
+        await interaction.followup.send(content=message,
+                                        ephemeral=should_use_ephemeral)
         del message
         next_bonus_point_in_time: float = (
             time() + slot_machine.next_bonus_wait_seconds)
