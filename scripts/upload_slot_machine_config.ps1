@@ -7,7 +7,7 @@ try {
     
     $scriptDirPath = Split-Path -Parent $MyInvocation.MyCommand.Path
     $botDirPath = Split-Path -Parent $scriptDirPath
-    $slotMachineConfigPath = "$botDirPath\data\slot_machine.json"
+    $slotMachineConfigPath = "$botDirPath\data\slot_machine_production.json"
     
     Write-Host "Server URL: $Env:SERVER_URL"
     Invoke-RestMethod -Uri "$Env:SERVER_URL/set_slot_machine_config" `

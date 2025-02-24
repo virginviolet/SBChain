@@ -7,13 +7,13 @@ try {
     
     $scriptDirPath = Split-Path -Parent $MyInvocation.MyCommand.Path
     $botDirPath = Split-Path -Parent $scriptDirPath
-    $slotMachineConfigPath = "$botDirPath\data\bot_configuration.json"
+    $botConfigPath = "$botDirPath\data\bot_configuration_production.json"
     
     Write-Host "Server URL: $Env:SERVER_URL"
     Invoke-RestMethod -Uri "$Env:SERVER_URL/set_bot_config" `
         -Method 'Post' `
         -Headers @{'token' = $Env:SERVER_TOKEN; "Content-Type"="application/json"} `
-        -Body (Get-Content -Raw -Path $slotMachineConfigPath)
+        -Body (Get-Content -Raw -Path $botConfigPath)
 }
 catch {
     Write-Host $_

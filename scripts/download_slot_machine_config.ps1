@@ -7,7 +7,7 @@ try {
     Invoke-RestMethod -Uri "$Env:SERVER_URL/get_slot_machine_config" `
         -Method 'Get' `
         -Headers @{'token' = $Env:SERVER_TOKEN} `
-        -OutFile "slot_machine.json"
+        -OutFile "slot_machine_downloaded.json"
 }
 catch {
     Write-Host "Failed to download slot machine configuration."

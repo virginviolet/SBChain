@@ -7,7 +7,7 @@ try {
     Invoke-RestMethod -Uri "$Env:SERVER_URL/download_checkpoints" `
         -Method 'Get' `
         -Headers @{'token' = $Env:SERVER_TOKEN} `
-        -OutFile "checkpoints.zip"
+        -OutFile "checkpoints_downloaded.zip"
 }
 catch {
     Write-Host "Failed to download checkpoints."

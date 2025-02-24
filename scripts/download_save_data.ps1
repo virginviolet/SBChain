@@ -7,7 +7,7 @@ try {
     Invoke-RestMethod -Uri "$Env:SERVER_URL/download_save_data" `
         -Method 'Get' `
         -Headers @{'token' = $Env:SERVER_TOKEN} `
-        -OutFile "save_data.zip"
+        -OutFile "save_data_downloaded.zip"
 }
 catch {
     Write-Host "Failed to download save data."
