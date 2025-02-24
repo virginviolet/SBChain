@@ -3028,12 +3028,12 @@ async def balance(interaction: Interaction,
 
         user: The user to check the balance. Defaults to None.
     """
-    user_to_check: Member | str
+    user_to_check: str
     if user is None:
-        user_to_check = interaction.user.name
+        user_to_check = interaction.user.display_name
         user_id: int = interaction.user.id
     else:
-        user_to_check = user.name
+        user_to_check = user.display_name
         user_id: int = user.id
 
     # print(f"Getting balance for user {user_to_check} ({user_id})...")
