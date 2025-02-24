@@ -3370,8 +3370,8 @@ async def slots(interaction: Interaction,
             "> Coins inserted: Fee\n"
             f"> 1:             1 {coin}\n"
             f"> <10:        2 {coins}\n"
-            "> <100:     10% 20%\n"
-            "> ≥100:  2% 7%\n"
+            "> <100:     20%\n"
+            "> ≥100:     7%\n"
             "\n"
             "Fees are calculated from your total stake (the amount of coins "
             "you insert), and are deducted from your total return (your "
@@ -3559,7 +3559,6 @@ async def slots(interaction: Interaction,
         for die_roll, amount in starting_bonus_awards.items():
             starting_bonus_table += f"> {die_roll}\t\t\t\t{amount}\n"
         has_played_before: bool = save_data.has_visited_casino
-        print(f"has_played_before: {has_played_before}")
         message_preamble: str
         if has_played_before:
             message_preamble = (f"Welcome back! You spent all your {coins} "
