@@ -1618,24 +1618,88 @@ class UserSaveData:
     """
 
     def __init__(self, user_id: int, user_name: str) -> None:
+        # print("Initializing save data...")
         self.user_id: int = user_id
         self.user_name: str = user_name
         self.file_name: str = f"data/save_data/{user_id}/save_data.json"
+        # TODO Improve performance by not loading the save file multiple times in init
         self._starting_bonus_available: bool | float
         self._has_visited_casino: bool
         self._reaction_message_received: bool
+        self._when_last_bonus_received: float | None
         if not exists(self.file_name):
-            self._starting_bonus_available = True
             self._has_visited_casino = False
+            self._starting_bonus_available = True
+            self._when_last_bonus_received = None
             self._reaction_message_received = False
             self.create()
         else:
+            self._has_visited_casino = self._load_has_visited_casino()
             self._starting_bonus_available = (
                 self._load_starting_bonus_available())
-            self._has_visited_casino = self._load_has_visited_casino()
+            self._when_last_bonus_received = (
+                self._load_when_last_bonus_received())
             self._reaction_message_received = (
-                self._load_reaction_message_received()
-            )
+                self._load_reaction_message_received())
+        # print("Save data initialized.")
+
+    def _load_has_visited_casino(self) -> bool:
+        """
+        Loads the casino visit status from the JSON file.
+        """
+        value: str | List[int] | bool | float | None = (
+            self.load("has_visited_casino"))
+        return_value: bool
+        if isinstance(value, bool):
+            return value
+        elif value is None:
+            return_value = False
+            print("Value of 'has_visited_casino' is None. "
+                  f"Setting to {return_value}.")
+            return return_value
+        else:
+            return_value = False
+            print("ERROR: Value of 'has_visited_casino' is not a boolean. "
+                  f"Setting to {return_value}.")
+            return return_value
+
+    def _load_when_last_bonus_received(self) -> float | None:
+        """
+        Loads the last bonus received timestamp from the JSON file.
+        """
+        value: str | List[int] | bool | float | None = (
+            self.load("when_last_bonus_received"))
+        if isinstance(value, float):
+            return value
+        elif value is None:
+            return None
+        else:
+            return_value = None
+            print("ERROR: Value of 'when_last_bonus_received' is neither None "
+                  f"nor a float. Setting to {return_value}.")
+            return return_value
+
+    @property
+    def has_visited_casino(self) -> bool:
+        """
+        Indicates if the user has visited the casino.
+        """
+        return self._load_has_visited_casino()
+
+    @has_visited_casino.setter
+    def has_visited_casino(self, value: bool) -> None:
+        """
+        Sets the status of the user's visit to the casino.
+        """
+        self._has_visited_casino = value
+        self.save("has_visited_casino", value)
+
+    @property
+    def when_last_bonus_received(self) -> float | None:
+        """
+        Indicates when the user last received a bonus.
+        """
+        return self._when_last_bonus_received
 
     def _load_starting_bonus_available(self) -> bool | float:
         """
@@ -1669,41 +1733,6 @@ class UserSaveData:
         """
         self._starting_bonus_available = value
         self.save("starting_bonus_available", value)
-
-    def _load_has_visited_casino(self) -> bool:
-        """
-        Loads the casino visit status from the JSON file.
-        """
-        value: str | List[int] | bool | float | None = (
-            self.load("has_visited_casino"))
-        return_value: bool
-        if isinstance(value, bool):
-            return value
-        elif value is None:
-            return_value = False
-            print("Value of 'has_visited_casino' is None. "
-                  f"Setting to {return_value}.")
-            return return_value
-        else:
-            return_value = False
-            print("ERROR: Value of 'has_visited_casino' is not a boolean. "
-                  f"Setting to {return_value}.")
-            return return_value
-
-    @property
-    def has_visited_casino(self) -> bool:
-        """
-        Indicates if the user has visited the casino.
-        """
-        return self._load_has_visited_casino()
-
-    @has_visited_casino.setter
-    def has_visited_casino(self, value: bool) -> None:
-        """
-        Sets the status of the user's visit to the casino.
-        """
-        self._has_visited_casino = value
-        self.save("has_visited_casino", value)
 
     def _load_reaction_message_received(self) -> bool:
         """
@@ -1766,9 +1795,10 @@ class UserSaveData:
                     file_contents: SaveData = {
                         "user_name": self.user_name,
                         "user_id": self.user_id,
+                        "has_visited_casino": False,
                         "starting_bonus_available": (
                             self._starting_bonus_available),
-                        "has_visited_casino": False,
+                        "when_last_bonus_received": None,
                         "messages_mined": [],
                         "reaction_message_received": False
                     }
@@ -2520,7 +2550,7 @@ async def process_reaction(message_id: int,
         if ((coin == "coin") or
             (coin_emoji_id == 0) or
             (coin_emoji_name == "") or
-            (casino_channel_id == 0)):
+                (casino_channel_id == 0)):
             print("WARNING: Skipping reaction message because "
                   "bot configuration is incomplete.")
             print(f"coin_emoji_id: {coin_emoji_id}")
@@ -2537,7 +2567,7 @@ async def process_reaction(message_id: int,
         if informed_about_coin_reactions:
             return
         channel: (VoiceChannel | StageChannel | ForumChannel | TextChannel |
-            CategoryChannel | Thread | PrivateChannel | None) = (
+                  CategoryChannel | Thread | PrivateChannel | None) = (
             bot.get_channel(channel_id))
         if not isinstance(channel, (VoiceChannel, TextChannel, Thread)):
             return
@@ -3319,6 +3349,10 @@ async def slots(interaction: Interaction,
     # TODO Add TOS parameter
     # TODO Add service parameter
     # IMPROVE Make incompatible parameters not selectable together
+    if private_room:
+        should_use_ephemeral = True
+    else:
+        should_use_ephemeral = False
     wager_int: int | None = insert_coins
     if wager_int is None:
         wager_int = 1
@@ -3328,7 +3362,8 @@ async def slots(interaction: Interaction,
         return
     elif wager_int == 0:
         message = "Insert coins to play!"
-        await interaction.response.send_message(message, ephemeral=True)
+        await interaction.response.send_message(
+            message, ephemeral=should_use_ephemeral)
         return
     # TODO Log/stat outcomes (esp. wager amounts)
     user: User | Member = interaction.user
@@ -3356,7 +3391,6 @@ async def slots(interaction: Interaction,
             slot_machine.configuration["combo_events"]
             ["jackpot"]["fixed_amount"])
         administrator: str = (await bot.fetch_user(administrator_id)).name
-        # FIX Fees table percentage weirdness
         help_message_1: str = (
             f"## {Coin} Slot Machine Help\n"
             f"Win big by playing the {Coin} slot machine!*\n\n"
@@ -3453,7 +3487,7 @@ async def slots(interaction: Interaction,
             "\n"
             "-# *Not guaranteed. Actually, for legal reasons, nothing about "
             "this game is guaranteed.\n")
-        # Allow public message, but default to ephemeral
+        # Use ephemeral messages unless explicitly set to False
         if private_room is False:
             should_use_ephemeral = False
         else:
@@ -3486,20 +3520,12 @@ async def slots(interaction: Interaction,
             should_use_ephemeral = False
         else:
             should_use_ephemeral = True
-        print(f"private_room: {private_room}")
-        print(f"should_use_ephemeral: {should_use_ephemeral}")
         await interaction.response.send_message(message,
                                                 ephemeral=should_use_ephemeral)
         return
     elif reboot:
         message = slot_machine.make_message(
-            f"-# The {Coin} slot machine is restarting..."
-        )
-        # Allow ephemeral messages, but default to public
-        if private_room is True:
-            should_use_ephemeral = True
-        else:
-            should_use_ephemeral = False
+            f"-# The {Coin} slot machine is restarting...")
         await interaction.response.send_message(message,
                                                 ephemeral=should_use_ephemeral)
         del message
@@ -3526,18 +3552,9 @@ async def slots(interaction: Interaction,
                    f"-# JACKPOT: {jackpot_pool} "
                    f"{coin_label}.")
         del coin_label
-        if private_room is True:
-            should_use_ephemeral = True
-        else:
-            should_use_ephemeral = False
         await interaction.response.send_message(message,
                                                 ephemeral=should_use_ephemeral)
         return
-
-    if private_room:
-        should_use_ephemeral = True
-    else:
-        should_use_ephemeral = False
 
     # Check if user is already playing on a slot machine
     if user_id in active_slot_machine_players:
@@ -3561,18 +3578,52 @@ async def slots(interaction: Interaction,
     user_balance: int | None = blockchain.get_balance(user=user_id_hash)
     if user_balance is None:
         user_balance = 0
+
+    has_played_before: bool = save_data.has_visited_casino
+    if not has_played_before:
         starting_bonus_available = True
-    elif user_balance <= 0 and time() < starting_bonus_available:
+    elif (user_balance <= 0) and (starting_bonus_available is False):
+        # If starting_bonus_available is a float, the above conditional
+        # will be false
+        when_last_bonus_received: float | None = (
+            save_data.when_last_bonus_received)
+        if when_last_bonus_received is None:
+            starting_bonus_available = True
+        else:
+            min_seconds_between_bonuses: int = slot_machine.next_bonus_wait_seconds
+            when_eligible_for_bonus: float = (
+                when_last_bonus_received + min_seconds_between_bonuses)
+            is_eligible_for_bonus: bool = time() >= when_eligible_for_bonus
+            if is_eligible_for_bonus:
+                starting_bonus_available = True
+            else:
+                starting_bonus_available = when_eligible_for_bonus
+                save_data.starting_bonus_available = when_eligible_for_bonus
+                min_time_between_bonuses: str = format_timespan(
+                    min_seconds_between_bonuses)
+                message = (f"Come back in {min_time_between_bonuses} and "
+                           "we will give you some coins to play with.")
+                await interaction.response.send_message(
+                    message, ephemeral=should_use_ephemeral)
+                del message
+                return
+    elif (user_balance <= 0) and (time() < starting_bonus_available):
+        # If starting_bonus_available is a boolean, the above conditional
+        # will be false
         seconds_left = int(starting_bonus_available - time())
         time_left: str = format_timespan(seconds_left)
-        message = (f"You are out of {Coins}. Come back in {time_left} "
-                   "to get some coins.")
-        await interaction.response.send_message(message, ephemeral=True)
+        message: str = (f"You are out of {Coins}. Come back in {time_left} "
+                        "to get some coins.")
+        # Use ephemeral unless explicitly set to False
+        if private_room is False:
+            should_use_ephemeral = False
+        else:
+            should_use_ephemeral = True
+        await interaction.response.send_message(
+            message, ephemeral=should_use_ephemeral)
         del message
         active_slot_machine_players.remove(user_id)
         return
-    elif user_balance <= 0 and starting_bonus_available is False:
-        starting_bonus_available = True
 
     should_give_bonus: bool = (
         (starting_bonus_available == True) or
@@ -3585,7 +3636,6 @@ async def slots(interaction: Interaction,
         starting_bonus_table: str = "> **Die roll**\t**Amount**\n"
         for die_roll, amount in starting_bonus_awards.items():
             starting_bonus_table += f"> {die_roll}\t\t\t\t{amount}\n"
-        has_played_before: bool = save_data.has_visited_casino
         message_preamble: str
         if has_played_before:
             message_preamble = (f"Welcome back! You spent all your {coins} "
@@ -3614,6 +3664,8 @@ async def slots(interaction: Interaction,
         if user_id in active_slot_machine_players:
             active_slot_machine_players.remove(user_id)
         return
+
+    del has_played_before
 
     if user_balance < wager_int:
         coin_label_w: str = format_coin_label(wager_int)

@@ -61,7 +61,8 @@ class SlotMachineConfig(TypedDict):
 class SaveData(TypedDict):
     user_name: str
     user_id: int
-    starting_bonus_available: bool | float
-    messages_mined: List[int]
     has_visited_casino: bool
+    starting_bonus_available: bool | float
+    when_last_bonus_received: float | None
+    messages_mined: List[int]
     reaction_message_received: bool
