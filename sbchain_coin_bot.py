@@ -1627,11 +1627,13 @@ class UserSaveData:
         self._has_visited_casino: bool
         self._reaction_message_received: bool
         self._when_last_bonus_received: float | None
+        self._mining_messages_enabled: bool
         if not exists(self.file_name):
             self._has_visited_casino = False
             self._starting_bonus_available = True
             self._when_last_bonus_received = None
             self._reaction_message_received = False
+            self._mining_messages_enabled = True
             self.create()
         else:
             self._has_visited_casino = self._load_has_visited_casino()
@@ -1641,6 +1643,9 @@ class UserSaveData:
                 self._load_when_last_bonus_received())
             self._reaction_message_received = (
                 self._load_reaction_message_received())
+            self._mining_messages_enabled = (
+                self._load_mining_messages_enabled()
+            )
         # print("Save data initialized.")
 
     def _load_has_visited_casino(self) -> bool:
@@ -1777,6 +1782,41 @@ class UserSaveData:
         self._reaction_message_received = value
         self.save("reaction_message_received", value)
 
+    def _load_mining_messages_enabled(self) -> bool:
+        """
+        Loads the mining messages preference from the JSON file.
+        """
+        value: str | List[int] | bool | float | None = (
+            self.load("mining_messages_enabled"))
+        return_value: bool
+        if isinstance(value, bool):
+            return value
+        elif value is None:
+            return_value = True
+            print("Value of 'mining_messages_enabled' is None. "
+                  f"Setting to {return_value}.")
+            return return_value
+        else:
+            return_value = True
+            print("ERROR: Value of 'mining_messages_enabled' "
+                  f"is not a boolean. Setting to {return_value}.")
+            return return_value
+
+    @property
+    def mining_messages_enabled(self) -> bool:
+        """
+        Indicates if the user has enabled mining messages.
+        """
+        return self._load_mining_messages_enabled()
+
+    @mining_messages_enabled.setter
+    def mining_messages_enabled(self, value: bool) -> None:
+        """
+        Sets the user's preference for mining messages.
+        """
+        self._mining_messages_enabled = value
+        self.save("mining_messages_enabled", value)
+
     def create(self) -> None:
         """
         Creates the necessary directories and files for the user.
@@ -1808,7 +1848,8 @@ class UserSaveData:
                             self._starting_bonus_available),
                         "when_last_bonus_received": None,
                         "messages_mined": [],
-                        "reaction_message_received": False
+                        "reaction_message_received": False,
+                        "mining_messages_enabled": True
                     }
                     file_contents_json: str = json.dumps(file_contents)
                     file.write(file_contents_json)
@@ -2566,6 +2607,11 @@ async def process_reaction(message_id: int,
             print(f"casino_channel_id: {casino_channel_id}")
             print(f"casino_channel: {casino_channel_id}")
             return
+        save_data: UserSaveData = UserSaveData(
+            user_id=sender_id, user_name=sender_name)
+        mining_messages_enabled: bool = save_data.mining_messages_enabled
+        if not mining_messages_enabled:
+            return
         receiver_name: str = receiver.name
         save_data_receiver: UserSaveData = UserSaveData(
             user_id=receiver_id, user_name=receiver_name)
@@ -2599,9 +2645,12 @@ async def process_reaction(message_id: int,
                         f"some time. Check you balance with `/balance`. "
                         "If you also want to mine a coin for someone, simply "
                         f"react {coin_emoji} to their message. "
-                        "Oh, and don't worry, I only inform people "
-                        f"about {coin} once.")
-        await user_message.reply(message, allowed_mentions=AllowedMentions.none())
+                        f"I only inform people about {coin} once. "
+                        "To stop me from messaging "
+                        "new players when you mine, type "
+                        "`/mining disable_reaction_messages: True`.")
+        await user_message.reply(message,
+                                 allowed_mentions=AllowedMentions.none())
         del user_message
         del message
         del channel
@@ -4030,6 +4079,38 @@ async def slots(interaction: Interaction,
         slot_machine.jackpot += 1
 
 
+# endregion
+
+# region /mining
+@bot.tree.command(name="mining",
+                  description="Configure mining settings")
+@app_commands.describe(disable_reaction_messages="Stop the bot from messaging "
+                       "new players when you mine their messages")
+async def mining(interaction: Interaction,
+                 disable_reaction_messages: bool = False) -> None:
+    """
+    Command to configure mining settings.
+
+    Args:
+    interaction              -- The interaction object representing the
+                                command invocation.
+    disable_reaction_messages -- Disable reaction messages
+    """
+    user: User | Member = interaction.user
+    user_id: int = user.id
+    user_name: str = user.name
+    save_data: UserSaveData = UserSaveData(user_id=user_id,
+                                           user_name=user_name)
+    save_data.mining_messages_enabled = not disable_reaction_messages
+    if disable_reaction_messages:
+        message = ("I will no longer message new players "
+                   "when you mine their messages.")
+    else:
+        message: str = ("I will message new players when you mine their "
+                        "messages. Thank you for "
+                        f"helping the {Coin} network grow!")
+    await interaction.response.send_message(message, ephemeral=True)
+    del message
 # endregion
 
 

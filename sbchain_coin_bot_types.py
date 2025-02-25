@@ -63,6 +63,7 @@ class SaveData(TypedDict):
     user_id: int
     has_visited_casino: bool
     starting_bonus_available: bool | float
-    when_last_bonus_received: float | None
     messages_mined: List[int]
+    when_last_bonus_received: float | None
     reaction_message_received: bool
+    mining_messages_enabled: bool
