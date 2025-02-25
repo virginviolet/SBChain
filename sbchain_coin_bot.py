@@ -1663,22 +1663,6 @@ class UserSaveData:
                   f"Setting to {return_value}.")
             return return_value
 
-    def _load_when_last_bonus_received(self) -> float | None:
-        """
-        Loads the last bonus received timestamp from the JSON file.
-        """
-        value: str | List[int] | bool | float | None = (
-            self.load("when_last_bonus_received"))
-        if isinstance(value, float):
-            return value
-        elif value is None:
-            return None
-        else:
-            return_value = None
-            print("ERROR: Value of 'when_last_bonus_received' is neither None "
-                  f"nor a float. Setting to {return_value}.")
-            return return_value
-
     @property
     def has_visited_casino(self) -> bool:
         """
@@ -1693,13 +1677,6 @@ class UserSaveData:
         """
         self._has_visited_casino = value
         self.save("has_visited_casino", value)
-
-    @property
-    def when_last_bonus_received(self) -> float | None:
-        """
-        Indicates when the user last received a bonus.
-        """
-        return self._when_last_bonus_received
 
     def _load_starting_bonus_available(self) -> bool | float:
         """
@@ -1733,6 +1710,37 @@ class UserSaveData:
         """
         self._starting_bonus_available = value
         self.save("starting_bonus_available", value)
+
+    def _load_when_last_bonus_received(self) -> float | None:
+        """
+        Loads the last bonus received timestamp from the JSON file.
+        """
+        value: str | List[int] | bool | float | None = (
+            self.load("when_last_bonus_received"))
+        if isinstance(value, float):
+            return value
+        elif value is None:
+            return None
+        else:
+            return_value = None
+            print("ERROR: Value of 'when_last_bonus_received' is neither None "
+                  f"nor a float. Setting to {return_value}.")
+            return return_value
+
+    @property
+    def when_last_bonus_received(self) -> float | None:
+        """
+        Indicates when the user last received a bonus.
+        """
+        return self._load_when_last_bonus_received()
+
+    @when_last_bonus_received.setter
+    def when_last_bonus_received(self, value: float) -> None:
+        """
+        Sets the timestamp of the last bonus received.
+        """
+        self._when_last_bonus_received = value
+        self.save("when_last_bonus_received", value)
 
     def _load_reaction_message_received(self) -> bool:
         """
@@ -3358,7 +3366,7 @@ async def slots(interaction: Interaction,
         wager_int = 1
     if wager_int < 0:
         message = "Thief!"
-        await interaction.response.send_message(message)
+        await interaction.response.send_message(message, ephemeral=False)
         return
     elif wager_int == 0:
         message = "Insert coins to play!"
@@ -3590,7 +3598,8 @@ async def slots(interaction: Interaction,
         if when_last_bonus_received is None:
             starting_bonus_available = True
         else:
-            min_seconds_between_bonuses: int = slot_machine.next_bonus_wait_seconds
+            min_seconds_between_bonuses: int = (
+                slot_machine.next_bonus_wait_seconds)
             when_eligible_for_bonus: float = (
                 when_last_bonus_received + min_seconds_between_bonuses)
             is_eligible_for_bonus: bool = time() >= when_eligible_for_bonus
@@ -3605,6 +3614,8 @@ async def slots(interaction: Interaction,
                            "we will give you some coins to play with.")
                 await interaction.response.send_message(
                     message, ephemeral=should_use_ephemeral)
+                if user_id in active_slot_machine_players:
+                    active_slot_machine_players.remove(user_id)
                 del message
                 return
     elif (user_balance <= 0) and (time() < starting_bonus_available):
@@ -3661,6 +3672,8 @@ async def slots(interaction: Interaction,
                                                 view=starting_bonus_view)
         await starting_bonus_view.wait()
         save_data.has_visited_casino = True
+        current_time: float = time()
+        save_data.when_last_bonus_received = current_time
         if user_id in active_slot_machine_players:
             active_slot_machine_players.remove(user_id)
         return
