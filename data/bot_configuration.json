@@ -4,6 +4,10 @@
     "coins": "coins",
     "Coins": "Coins",
     "coin_emoji_id": "0",
+    "coin_emoji_name": "coin",
     "casino_house_id": "0",
-    "administrator_id": "0"
+    "administrator_id": "0",
+    "casino_channel_id": "0",
+    "blockchain_name": "blockchain",
+    "Blockchain_name": "Blockchain"
 }
