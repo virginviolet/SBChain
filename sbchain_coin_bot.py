@@ -29,6 +29,7 @@ from discord import (Guild, Intents, Interaction, Member, Message, Client,
                      Emoji, PartialEmoji, Role, User, TextChannel, VoiceChannel,
                      app_commands, utils, CategoryChannel, ForumChannel,
                      StageChannel, Thread, AllowedMentions)
+from discord.app_commands import AppCommand
 from discord.abc import PrivateChannel
 from discord.ui import View, Button
 from discord.ext import commands
@@ -2621,6 +2622,10 @@ async def process_reaction(message_id: int,
         save_data: UserSaveData = UserSaveData(
             user_id=sender_id, user_name=sender_name)
         mining_messages_enabled: bool = save_data.mining_messages_enabled
+        if about_command_mention is None:
+            print("ERROR: `about_command_mention` is None. This usually means "
+                  "that the commands have not been synced yet.")
+            return
         if not mining_messages_enabled:
             return
         receiver_name: str = receiver.name
@@ -2636,7 +2641,6 @@ async def process_reaction(message_id: int,
             bot.get_channel(channel_id))
         if not isinstance(channel, (VoiceChannel, TextChannel, Thread)):
             return
-        coin_emoji = PartialEmoji(name=coin_emoji_name, id=coin_emoji_id)
         casino_channel: (VoiceChannel | StageChannel | ForumChannel |
                          TextChannel | CategoryChannel | Thread |
                          PrivateChannel |
@@ -2648,11 +2652,10 @@ async def process_reaction(message_id: int,
         elif casino_channel is None:
             print("ERROR: Casino channel is None.")
             return
-        casino_channel_mention: str = casino_channel.mention
         sender_mention: str = sender.mention
         message: str = (f"-# {sender_mention} has "
                         f"mined a {coin} for you! "
-                        f"Enter `/about_{coin.lower()}` "
+                        f"Enter {about_command_mention} "
                         "in the chat box to learn more.")
         await user_message.reply(message,
                                  allowed_mentions=AllowedMentions.none())
@@ -2859,6 +2862,7 @@ all_channel_checkpoints: Dict[int, ChannelCheckpoints] = {}
 casino_channel_id: int = 0
 blockchain_name: str = ""
 Blockchain_name: str = ""
+about_command_mention: str | None = ""
 # endregion
 
 # region Flask
@@ -2905,9 +2909,11 @@ async def on_ready() -> None:
     If an error occurs during the command sync process, it catches the exception
     and prints an error message.
     """
+    global all_channel_checkpoints
+    global about_command_mention
+
     print("Bot started.")
 
-    global all_channel_checkpoints
     all_channel_checkpoints = (
         start_checkpoints(limit=channel_checkpoint_limit))
 
@@ -2922,8 +2928,23 @@ async def on_ready() -> None:
     # Sync the commands to Discord
     print("Syncing global commands...")
     try:
-        await bot.tree.sync()
+        global_commands: List[app_commands.AppCommand] = await bot.tree.sync()
         print(f"Synced commands for bot {bot.user}.")
+        print(f"Fetching command IDs...")
+        about_command: AppCommand | None = None
+        command_name: str = ""
+        for command in global_commands:
+            command_name = command.name
+            if command_name == f"about_{coin.lower()}":
+                about_command = command
+                break
+        print("Command IDs fetched.")
+        if about_command is None:
+            print("Error: Could not find the about command. "
+                  "Using string instead.")
+            about_command_mention = f"about_{coin.lower()}"
+        else:
+            about_command_mention = about_command.mention
         print(f"Bot is ready!")
     except Exception as e:
         print(f"Error syncing commands: {e}")
