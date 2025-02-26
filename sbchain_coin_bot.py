@@ -520,7 +520,9 @@ class BotConfiguration:
                 "coin_emoji_name": "coin_emoji_name",
                 "casino_house_id": "casino_house_id",
                 "administrator_id": "administrator_id",
-                "casino_channel_id": "casino_channel_id"
+                "casino_channel_id": "casino_channel_id",
+                "blockchain_name": "blockchain_name",
+                "Blockchain_name": "Blockchain_name"
             }
             # TODO Add reels env vars
 
