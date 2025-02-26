@@ -4127,7 +4127,7 @@ async def mining(interaction: Interaction,
 # region /about_coin
 
 
-@bot.tree.command(name=f"about_{coin}",
+@bot.tree.command(name=f"about_{coin.lower()}",
                   description=f"About {coin}")
 async def about_coin(interaction: Interaction) -> None:
     """
@@ -4139,9 +4139,9 @@ async def about_coin(interaction: Interaction) -> None:
      """
     coin_emoji = PartialEmoji(name=coin_emoji_name, id=coin_emoji_id)
     casino_channel: (VoiceChannel | StageChannel | ForumChannel |
-                        TextChannel | CategoryChannel | Thread |
-                        PrivateChannel |
-                        None) = bot.get_channel(casino_channel_id)
+                     TextChannel | CategoryChannel | Thread |
+                     PrivateChannel |
+                     None) = bot.get_channel(casino_channel_id)
     if isinstance(casino_channel, PrivateChannel):
         print("ERROR: Casino channel is a private channel.")
         return
