@@ -2652,14 +2652,8 @@ async def process_reaction(message_id: int,
         sender_mention: str = sender.mention
         message: str = (f"-# {sender_mention} has "
                         f"mined a {coin} for you! "
-                        f"You should come visit the {casino_channel_mention} "
-                        f"some time. Check you balance with `/balance`. "
-                        "If you also want to mine a coin for someone, simply "
-                        f"react {coin_emoji} to their message. "
-                        f"I only inform people about {coin} once. "
-                        "To stop me from messaging "
-                        "new players when you mine, type "
-                        "`/mining disable_reaction_messages: True`.")
+                        f"Enter `/about_{coin.lower()}` "
+                        "in the chat box to learn more.")
         await user_message.reply(message,
                                  allowed_mentions=AllowedMentions.none())
         del user_message
@@ -4158,9 +4152,11 @@ async def about_coin(interaction: Interaction) -> None:
                     "to their message.\n"
                     "Check your balance by typing `/balance` in "
                     "the chat.\n"
-                    "If you prefer that the bot does not reply to "
-                    "new players when you mine their messages, "
-                    "type `/mining disable_reaction_messages: True`.\n"
+                    "\n"
+                    f"New players will be informed only once about {coin}. "
+                    "But if you prefer that the bot does not reply to "
+                    "new players when you mine their messages, type\n"
+                    "`/mining disable_reaction_messages: True`.\n"
                     "\n"
                     f"You should come visit the {casino_channel_mention} "
                     "some time. You can play on the slot machines "
