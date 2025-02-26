@@ -12,6 +12,8 @@ class BotConfig(TypedDict):
     casino_house_id: str
     administrator_id: str
     casino_channel_id: str
+    blockchain_name: str
+    Blockchain_name: str
 
 
 class Reels(TypedDict):

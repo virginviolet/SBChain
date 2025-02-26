@@ -396,6 +396,7 @@ class BotConfiguration:
                 that ADMINISTRATOR_ID is not set.
         """
         print("Initializing bot configuration...")
+        # TODO Do not integers as string
         self.file_name: str = file_name
         attributes_set = False
         while attributes_set is False:
@@ -415,6 +416,10 @@ class BotConfiguration:
                     int(str(self.configuration["casino_house_id"])))
                 self.casino_channel_id: int = (
                     int(str(self.configuration["casino_channel_id"])))
+                self.blockchain_name: str = (
+                    str(self.configuration["blockchain_name"]))
+                self.Blockchain_name: str = (
+                    str(self.configuration["Blockchain_name"]))
                 attributes_set = True
             except KeyError as e:
                 print(f"ERROR: Missing key in bot configuration: {e}\n"
@@ -481,7 +486,9 @@ class BotConfiguration:
             "coin_emoji_name": "",
             "casino_house_id": "0",
             "administrator_id": "0",
-            "casino_channel_id": "0"
+            "casino_channel_id": "0",
+            "blockchain_name": "blockchain",
+            "Blockchain_name": "Blockchain"
         }
         # Save the configuration to the file
         with open(self.file_name, "w") as file:
@@ -2344,8 +2351,8 @@ def invoke_bot_configuration() -> None:
     """
     print("Loading bot configuration...")
     global configuration, coin, Coin, coins, Coins, coin_emoji_id
-    global coin_emoji_name, casino_house_id, administrator_id, slot_machine
-    global casino_channel_id
+    global coin_emoji_name, blockchain_name, Blockchain_name, casino_house_id
+    global administrator_id, slot_machine, casino_channel_id
     configuration = BotConfiguration()
     coin = configuration.coin
     Coin = configuration.Coin
@@ -2356,6 +2363,8 @@ def invoke_bot_configuration() -> None:
     casino_house_id = configuration.casino_house_id
     administrator_id = configuration.administrator_id
     casino_channel_id = configuration.casino_channel_id
+    blockchain_name = configuration.blockchain_name
+    Blockchain_name = configuration.Blockchain_name
     print("Bot configuration loaded.")
 
 
@@ -2852,6 +2861,8 @@ casino_house_id: int = 0
 administrator_id: int = 0
 all_channel_checkpoints: Dict[int, ChannelCheckpoints] = {}
 casino_channel_id: int = 0
+blockchain_name: str = ""
+Blockchain_name: str = ""
 # endregion
 
 # region Flask
@@ -4111,6 +4122,52 @@ async def mining(interaction: Interaction,
                         f"helping the {Coin} network grow!")
     await interaction.response.send_message(message, ephemeral=True)
     del message
+# endregion
+
+# region /about_coin
+
+
+@bot.tree.command(name=f"about_{coin}",
+                  description=f"About {coin}")
+async def about_coin(interaction: Interaction) -> None:
+    """
+    Command to display information about the coin.
+
+    Args:
+    interaction -- The interaction object representing the
+                     command invocation.
+     """
+    coin_emoji = PartialEmoji(name=coin_emoji_name, id=coin_emoji_id)
+    casino_channel: (VoiceChannel | StageChannel | ForumChannel |
+                        TextChannel | CategoryChannel | Thread |
+                        PrivateChannel |
+                        None) = bot.get_channel(casino_channel_id)
+    if isinstance(casino_channel, PrivateChannel):
+        print("ERROR: Casino channel is a private channel.")
+        return
+    elif casino_channel is None:
+        print("ERROR: Casino channel is None.")
+        return
+    casino_channel_mention: str = casino_channel.mention
+    message: str = (f"## {Coin}\n"
+                    f"{Coin} is a proof-of-yapping cryptocurrency "
+                    f"that lives on the {blockchain_name}.\n"
+                    f"To mine a {coin} for someone, react {coin_emoji} "
+                    "to their message.\n"
+                    "Check your balance by typing `/balance` in "
+                    "the chat.\n"
+                    "If you prefer that the bot does not reply to "
+                    "new players when you mine their messages, "
+                    "type `/mining disable_reaction_messages: True`.\n"
+                    "\n"
+                    f"You should come visit the {casino_channel_mention} "
+                    "some time. You can play on the slot machines "
+                    "there with the `/slots` command.\n"
+                    "If you want to know more about the slot machines, "
+                    "type `/slots show_help: True`.")
+    await interaction.response.send_message(message, ephemeral=True)
+    del message
+
 # endregion
 
 
