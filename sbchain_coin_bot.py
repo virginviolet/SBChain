@@ -3646,6 +3646,11 @@ async def slots(interaction: Interaction,
         return
 
     # Check if user is already playing on a slot machine
+    wait_seconds_left: int = 2
+    while user_id in active_slot_machine_players and wait_seconds_left > 0:
+        await asyncio.sleep(1)
+        wait_seconds_left -= 1
+    # If the user is still in the active players list, send a message and return
     if user_id in active_slot_machine_players:
         await interaction.response.send_message(
             "You are only allowed to play "
@@ -4184,7 +4189,6 @@ async def about_coin(interaction: Interaction) -> None:
 
 
 # TODO Track reaction removals
-# TODO Prevent annoying/misleading message about that you cannot play on multiple slot machines at the same time
 # TODO Leaderboard
 # TODO Add casino jobs
 # TODO Add more games
