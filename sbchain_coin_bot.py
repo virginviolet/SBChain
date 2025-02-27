@@ -1471,10 +1471,14 @@ class SlotMachine:
                 == results["reel3"]["associated_combo_event"].keys())):
             return ("standard_lose", "No win", 0)
 
-        low_wager_standard_fee = 1
-        low_wager_jackpot_fee = 1
+        # IMPROVE Code is repeated from slots() function
+        fees_dict: Dict[str, int | float] = slot_machine.configuration["fees"]
+        low_wager_main_fee: int = (
+            cast(int, fees_dict["low_wager_main"]))
+        low_wager_jackpot_fee: int = (
+            cast(int, fees_dict["low_wager_jackpot"]))
         jackpot_fee_paid: bool = (
-            wager >= (low_wager_jackpot_fee + low_wager_standard_fee))
+            wager >= (low_wager_jackpot_fee + low_wager_main_fee))
         no_jackpot_mode: bool = False if jackpot_fee_paid else True
         # Since associated_combo_event is a dict with only one key,
         # we can get the key name (thus event name) by getting the first key
@@ -3791,7 +3795,7 @@ async def slots(interaction: Interaction,
     jackpot_fee: int
     main_fee: int
     if no_jackpot_mode:
-        # TODO Make min_wager config keys
+        # IMPROVE Make min_wager config keys
         main_fee = low_wager_main_fee
         jackpot_fee = 0
     elif wager_int < 10:
@@ -3912,20 +3916,9 @@ async def slots(interaction: Interaction,
                          "Better luck next time!")
         net_return = -wager_int
         total_return = 0
-    elif no_jackpot_mode:
-        net_return = win_money - main_fee
-        if win_money > 0:
-            total_return = win_money - main_fee
-        else:
-            total_return = wager_int - main_fee
-    else:
-        net_return = win_money - main_fee - jackpot_fee
-        if win_money > 0:
-            # You don't keep any of your initial money on wins
-            total_return = win_money - main_fee - jackpot_fee
-        else:
-            # You keep you wager minus fees on lose
-            total_return = wager_int - main_fee - jackpot_fee
+    net_return = win_money - main_fee - jackpot_fee
+    total_return = wager_int + win_money - main_fee - jackpot_fee
+    # print(f"wager: {wager_int}")
     # print(f"standard_fee: {main_fee}")
     # print(f"jackpot_fee: {jackpot_fee}")
     # print(f"jackpot_fee_paid: {jackpot_fee_paid}")
