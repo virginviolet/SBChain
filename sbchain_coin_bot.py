@@ -3114,9 +3114,14 @@ async def transfer(interaction: Interaction, amount: int, user: Member) -> None:
     log.log(line=f"{sender} ({sender_id}) transferred {amount} {coin_label_a} "
             f"to {receiver} ({receiver_id}).",
             timestamp=timestamp)
-    await interaction.response.send_message(f"{sender} transferred "
-                                            f"{amount} {coin_label_a} "
-                                            f"to {receiver.mention}'s account.")
+    sender_mention: str = sender.mention
+    receiver_mention: str = receiver.mention
+    allowed_pings = AllowedMentions(users=[receiver])
+    await interaction.response.send_message(
+        f"{sender_mention} transferred "
+        f"{amount} {coin_label_a} "
+        f"to {receiver_mention}'s account.",
+        allowed_mentions=allowed_pings)
     del sender
     del sender_id
     del receiver
