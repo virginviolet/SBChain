@@ -399,55 +399,58 @@ class BotConfiguration:
         print("Initializing bot configuration...")
         # TODO Do not integers as string
         self.file_name: str = file_name
+        self._default_config: BotConfig = {
+            "coin": "coin",
+            "Coin": "Coin",
+            "coins": "coins",
+            "Coins": "Coins",
+            "coin_emoji_id": 0,
+            "coin_emoji_name": "",
+            "casino_house_id": 0,
+            "administrator_id": 0,
+            "casino_channel_id": 0,
+            "blockchain_name": "blockchain",
+            "Blockchain_name": "Blockchain"
+        }
         attributes_set = False
         while attributes_set is False:
             try:
                 self.configuration: BotConfig = self.read()
-                self.coin = str(self.configuration["coin"])
-                self.Coin = str(self.configuration["Coin"])
-                self.coins = str(self.configuration["coins"])
-                self.Coins = str(self.configuration["Coins"])
+                self.coin: str = self.configuration["coin"]
+                self.Coin: str = self.configuration["Coin"]
+                self.coins: str = self.configuration["coins"]
+                self.Coins: str = self.configuration["Coins"]
                 self.coin_emoji_id: int = (
-                    int(str(self.configuration["coin_emoji_id"])))
+                    self.configuration["coin_emoji_id"])
                 self.coin_emoji_name: str = (
-                    str(self.configuration["coin_emoji_name"]))
+                    self.configuration["coin_emoji_name"])
                 self.administrator_id: int = (
-                    int(str(self.configuration["administrator_id"])))
+                    self.configuration["administrator_id"])
                 self.casino_house_id: int = (
-                    int(str(self.configuration["casino_house_id"])))
+                    self.configuration["casino_house_id"])
                 self.casino_channel_id: int = (
-                    int(str(self.configuration["casino_channel_id"])))
+                    self.configuration["casino_channel_id"])
                 self.blockchain_name: str = (
-                    str(self.configuration["blockchain_name"]))
+                    self.configuration["blockchain_name"])
                 self.Blockchain_name: str = (
-                    str(self.configuration["Blockchain_name"]))
+                    self.configuration["Blockchain_name"])
                 attributes_set = True
             except KeyError as e:
                 print(f"ERROR: Missing key in bot configuration: {e}\n"
                       "The bot configuration file will be replaced "
                       "with template values.")
                 self.create()
-            self.administrator_id: int = int(
-                str(self.configuration["administrator_id"]))
-            self.casino_house_id: int = int(
-                str(self.configuration["casino_house_id"]))
-        # IMPROVE DRY
-        if self.coin_emoji_id == 0:
-            print("WARNING: `coin_emoji_id` has not set "
-                  "in bot_configuration.json nor "
-                  "in the environment variables.")
-        if self.coin_emoji_name == "":
-            print("WARNING: `coin_emoji_name` has not set "
-                  "in bot_configuration.json nor "
-                  "in the environment variables.")
-        if self.administrator_id == 0:
-            print("WARNING: `administrator_id` has not been set "
-                  f"in '{self.file_name}' nor "
-                  "in the environment variables.")
-        if self.casino_channel_id == 0:
-            print("WARNING: `casino_channel_id` has not been set "
-                  f"in '{self.file_name}' nor "
-                  "in the environment variables.")
+        
+        # Iterate this class' attributes
+        attributes: Dict[str, Any] = self.__dict__
+        for attribute in attributes:
+            if not attribute in self._default_config:
+                continue
+            configured_value: str | int = attributes[attribute]
+            default_value: str | int = cast(str | int, self._default_config[attribute])
+            if (configured_value == default_value):
+                print(f"WARNING: `{attribute}` has not been set "
+                f"in '{self.file_name}' nor in the environment variables.")
         print(f"Bot configuration initialized.")
 
     def create(self) -> None:
@@ -478,19 +481,7 @@ class BotConfiguration:
 
         # Create the configuration file
         # Default configuration
-        configuration: BotConfig = {
-            "coin": "coin",
-            "Coin": "Coin",
-            "coins": "coins",
-            "Coins": "Coins",
-            "coin_emoji_id": "0",
-            "coin_emoji_name": "",
-            "casino_house_id": "0",
-            "administrator_id": "0",
-            "casino_channel_id": "0",
-            "blockchain_name": "blockchain",
-            "Blockchain_name": "Blockchain"
-        }
+        configuration: BotConfig = self._default_config
         # Save the configuration to the file
         with open(self.file_name, "w") as file:
             file.write(json.dumps(configuration))
@@ -508,32 +499,19 @@ class BotConfiguration:
             self.create()
 
         with open(self.file_name, "r") as file:
-            configuration: BotConfig = (
-                json.loads(file.read()))
+            configuration: BotConfig = json.loads(file.read())
             # Override the configuration with environment variables
-            # IMPROVE Can we use a TypedDict for env_vars?
-            env_vars: Dict[str, str] = {
-                "coin": "coin",
-                "Coin": "Coin",
-                "coins": "coins",
-                "Coins": "Coins",
-                "coin_emoji_id": "coin_emoji_id",
-                "coin_emoji_name": "coin_emoji_name",
-                "casino_house_id": "casino_house_id",
-                "administrator_id": "administrator_id",
-                "casino_channel_id": "casino_channel_id",
-                "blockchain_name": "blockchain_name",
-                "Blockchain_name": "Blockchain_name"
-            }
             # TODO Add reels env vars
-
-            for env_var, config_key in env_vars.items():
-                if os_environ.get(env_var):
-                    configuration[config_key] = os_environ.get(env_var, "")
+            # BUG: Environment variable names are be case-insensitive on Windows
+            for config_key in configuration:
+                env_value: str | None = os_environ.get(config_key)
+                if env_value:
+                    if isinstance(configuration[config_key], int):
+                        configuration[config_key] = int(env_value)
+                    else:
+                        configuration[config_key] = env_value
                     print(f"NOTE: {config_key} overridden by "
-                          "environment variable "
-                          f"to {configuration[config_key]}.")
-
+                          f"environment variable to {env_value}.")
             return configuration
 
 
@@ -4108,11 +4086,11 @@ async def slots(interaction: Interaction,
         slot_machine.jackpot = jackpot_seed
     else:
         slot_machine.jackpot += 1
-
-
 # endregion
 
 # region /mining
+
+
 @bot.tree.command(name="mining",
                   description="Configure mining settings")
 @app_commands.describe(disable_reaction_messages="Stop the bot from messaging "

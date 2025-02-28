@@ -7,11 +7,11 @@ class BotConfig(TypedDict):
     Coin: str
     coins: str
     Coins: str
-    coin_emoji_id: str
+    coin_emoji_id: int
     coin_emoji_name: str
-    casino_house_id: str
-    administrator_id: str
-    casino_channel_id: str
+    casino_house_id: int
+    administrator_id: int
+    casino_channel_id: int
     blockchain_name: str
     Blockchain_name: str
 
