@@ -2272,12 +2272,12 @@ class GrifterSuppliers:
         """
         Loads the grifter suppliers from the JSON file.
         """
-        if not exists(self.file_name):
-            print("Grifter suppliers file not found.")
-            return []
         # Create missing directories
         directories: str = self.file_name[:self.file_name.rfind("/")]
         makedirs(directories, exist_ok=True)
+        if not exists(self.file_name):
+            print("Grifter suppliers file not found.")
+            return []
 
         # Load the data from the file
         with open(self.file_name, "r") as file:
@@ -3189,6 +3189,7 @@ async def transfer(interaction: Interaction, amount: int, user: Member) -> None:
     elif amount < 0:
         message = "You cannot transfer a negative amount of coins."
         await interaction.response.send_message(message, ephemeral=True)
+        return
     try:
         balance = blockchain.get_balance(user_unhashed=sender_id)
     except Exception as e:
