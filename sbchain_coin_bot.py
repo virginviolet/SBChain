@@ -2287,13 +2287,14 @@ class GrifterSuppliers:
                 print("No grifter suppliers found.")
         return suppliers
 
-    def add(self, users: List[User | Member]) -> None:
+    async def add(self, users: List[int]) -> None:
         """
         Add user IDs to the list of grifter suppliers.
         """
-        for user in users:
-            user_id: int = user.id
+        for user_id in users:
+            user: User = await bot.fetch_user(user_id)
             user_name: str = user.name
+            del user
             if user_id not in self.suppliers:
                 self.suppliers.append(user_id)
                 print(f"User {user_name} ({user_id}) added "
@@ -3089,8 +3090,8 @@ async def on_message(message: Message) -> None:
         referenced_message_id)
     referenced_message_text: str = referenced_message.content
     if referenced_message_text.startswith("!suppliers"):
-        users_mentioned: List[User | Member] = message.mentions
-        grifter_suppliers.add(users_mentioned)
+        users_mentioned: List[int] = message.raw_mentions
+        await grifter_suppliers.add(users_mentioned)
         del users_mentioned
         return
     referenced_message_author: User | Member = referenced_message.author
@@ -3120,7 +3121,9 @@ async def on_message(message: Message) -> None:
             return
         referenced_message_full_invoker: User | Member = (
             referenced_message_full_interaction.user)
-        grifter_suppliers.add([referenced_message_full_invoker])
+        referenced_message_full_invoker_id: int = (
+            referenced_message_full_invoker.id)
+        await grifter_suppliers.add([referenced_message_full_invoker_id])
 # endregion
 
 # region Reaction
