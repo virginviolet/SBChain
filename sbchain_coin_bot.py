@@ -26,7 +26,7 @@ from time import sleep, time
 from datetime import datetime
 from humanfriendly import format_timespan
 from discord import (Guild, Intents, Interaction, Member, Message, Client,
-                     Emoji, PartialEmoji, Role, User, TextChannel, VoiceChannel,
+                     Emoji, MessageInteraction, PartialEmoji, Role, User, TextChannel, VoiceChannel,
                      app_commands, utils, CategoryChannel, ForumChannel,
                      StageChannel, Thread, AllowedMentions)
 from discord.app_commands import AppCommand
@@ -411,7 +411,8 @@ class BotConfiguration:
             "casino_channel_id": 0,
             "blockchain_name": "blockchain",
             "Blockchain_name": "Blockchain",
-            "grifter_swap_id": 0
+            "grifter_swap_id": 0,
+            "sbcoin_id": 0
         }
         attributes_set = False
         while attributes_set is False:
@@ -437,6 +438,8 @@ class BotConfiguration:
                     self.configuration["Blockchain_name"])
                 self.grifter_swap_id: int = (
                     self.configuration["grifter_swap_id"])
+                self.sbcoin_id: int = (
+                    self.configuration["sbcoin_id"])
                 attributes_set = True
             except KeyError as e:
                 print(f"ERROR: Missing key in bot configuration: {e}\n"
@@ -1624,14 +1627,12 @@ class UserSaveData:
         self._reaction_message_received: bool
         self._when_last_bonus_received: float | None
         self._mining_messages_enabled: bool
-        self._is_grifter_supplier: bool | None
         if not exists(self.file_name):
             self._has_visited_casino = False
             self._starting_bonus_available = True
             self._when_last_bonus_received = None
             self._reaction_message_received = False
             self._mining_messages_enabled = True
-            self._is_grifter_supplier = False
             self.create()
         else:
             self._has_visited_casino = self._load_has_visited_casino()
@@ -1644,7 +1645,6 @@ class UserSaveData:
             self._mining_messages_enabled = (
                 self._load_mining_messages_enabled()
             )
-            self._is_grifter_supplier = self._load_is_grifter_supplier()
         # print("Save data initialized.")
 
     def _load_has_visited_casino(self) -> bool:
@@ -1816,37 +1816,6 @@ class UserSaveData:
         self._mining_messages_enabled = value
         self.save("mining_messages_enabled", value)
 
-    def _load_is_grifter_supplier(self) -> bool | None:
-        """
-        Loads the grifter supplier status from the JSON file.
-        """
-        value: str | List[int] | bool | float | None = (
-            self.load("is_grifter_supplier"))
-        if isinstance(value, bool):
-            return value
-        elif value is None:
-            return None
-        else:
-            return_value = None
-            print("ERROR: Value of 'is_grifter_supplier' is not a boolean. "
-                  f"Setting to {return_value}.")
-            return return_value
-
-    @property
-    def is_grifter_supplier(self) -> bool | None:
-        """
-        Indicates if the user is a grifter supplier.
-        """
-        return self._load_is_grifter_supplier()
-
-    @is_grifter_supplier.setter
-    def is_grifter_supplier(self, value: bool | None) -> None:
-        """
-        Sets the user's grifter supplier status.
-        """
-        self._is_grifter_supplier = value
-        self.save("is_grifter_supplier", value)
-
     def create(self) -> None:
         """
         Creates the necessary directories and files for the user.
@@ -1879,8 +1848,7 @@ class UserSaveData:
                         "when_last_bonus_received": None,
                         "messages_mined": [],
                         "reaction_message_received": False,
-                        "mining_messages_enabled": True,
-                        "is_grifter_supplier": None
+                        "mining_messages_enabled": True
                     }
                     file_contents_json: str = json.dumps(file_contents)
                     file.write(file_contents_json)
@@ -2287,6 +2255,74 @@ class SlotMachineView(View):
         # all reels are stopped
 # endregion
 
+# region Grifter Suppliers
+
+
+class GrifterSuppliers:
+    """
+    Handels which users are grifter suppliers.
+    """
+
+    def __init__(self) -> None:
+        self.file_name: str = "data/grifter_suppliers.json"
+        # IMPROVE Use hash set instead of list
+        self.suppliers: List[int] = self.load()
+
+    def load(self) -> List[int]:
+        """
+        Loads the grifter suppliers from the JSON file.
+        """
+        if not exists(self.file_name):
+            print("Grifter suppliers file not found.")
+            return []
+        # Create missing directories
+        directories: str = self.file_name[:self.file_name.rfind("/")]
+        makedirs(directories, exist_ok=True)
+
+        # Load the data from the file
+        with open(self.file_name, "r") as file:
+            suppliers_json: Dict[str, List[int]] = json.load(file)
+            suppliers: List[int] = suppliers_json.get("suppliers", [])
+            if len(suppliers) == 0:
+                print("No grifter suppliers found.")
+        return suppliers
+
+    def add(self, users: List[User | Member]) -> None:
+        """
+        Add user IDs to the list of grifter suppliers.
+        """
+        for user in users:
+            user_id: int = user.id
+            user_name: str = user.name
+            if user_id not in self.suppliers:
+                self.suppliers.append(user_id)
+                print(f"User {user_name} ({user_id}) added "
+                      "to the grifter suppliers registry.")
+            else:
+                print(f"User {user_name} ({user_id}) is already in the"
+                      "grifter suppliers registry.")
+        with open(self.file_name, "w") as file:
+            json.dump({"suppliers": self.suppliers}, file)
+
+    def remove(self, user: User | Member) -> None:
+        """
+        Remove user ID from the list of grifter suppliers.
+        """
+        user_id: int = user.id
+        user_name: str = user.name
+        if user_id in self.suppliers:
+            self.suppliers.remove(user_id)
+            print(f"User {user_name} ({user_id}) removed from the "
+                  "grifter suppliers registry.")
+        else:
+            print(f"User {user_name} ({user_id}) is not in the "
+                  "grifter suppliers registry.")
+        with open(self.file_name, "w") as file:
+            json.dump({"suppliers": self.suppliers}, file)
+
+
+# endregion
+
 # region Flask funcs
 
 
@@ -2376,7 +2412,8 @@ def invoke_bot_configuration() -> None:
     print("Loading bot configuration...")
     global configuration, coin, Coin, coins, Coins, coin_emoji_id
     global coin_emoji_name, blockchain_name, Blockchain_name, casino_house_id
-    global administrator_id, slot_machine, casino_channel_id
+    global administrator_id, slot_machine, casino_channel_id, grifter_swap_id
+    global sbcoin_id
     configuration = BotConfiguration()
     coin = configuration.coin
     Coin = configuration.Coin
@@ -2389,6 +2426,8 @@ def invoke_bot_configuration() -> None:
     casino_channel_id = configuration.casino_channel_id
     blockchain_name = configuration.blockchain_name
     Blockchain_name = configuration.Blockchain_name
+    grifter_swap_id = configuration.grifter_swap_id
+    sbcoin_id = configuration.sbcoin_id
     print("Bot configuration loaded.")
 
 
@@ -2398,6 +2437,14 @@ def reinitialize_slot_machine() -> None:
     """
     global slot_machine
     slot_machine = SlotMachine()
+
+
+def reinitialize_grifter_suppliers() -> None:
+    """
+    Initializes the grifter suppliers.
+    """
+    global grifter_suppliers
+    grifter_suppliers = GrifterSuppliers()
 # endregion
 
 # region CP start
@@ -2884,6 +2931,8 @@ casino_channel_id: int = 0
 blockchain_name: str = ""
 Blockchain_name: str = ""
 about_command_mention: str | None = ""
+grifter_swap_id: int = 0
+sbcoin_id: int = 0
 # endregion
 
 # region Flask
@@ -2914,7 +2963,7 @@ print("Starting bot...")
 invoke_bot_configuration()
 
 slot_machine = SlotMachine()
-reinitialize_slot_machine()
+grifter_suppliers = GrifterSuppliers()
 
 log = Log(time_zone="Canada/Central")
 
@@ -3025,28 +3074,58 @@ async def on_message(message: Message) -> None:
             # await message.channel.send("An error occurred. "
             #                            f"{administrator} pls fix.")
             return
-
+    # Look for GrifterSwap reply to a message with "!suppliers"
     message_author: User | Member = message.author
     message_author_id: int = message_author.id
     del message_author
-    grifter_swap_id: int = configuration.grifter_swap_id
     if message_author_id != grifter_swap_id:
         return
-    users_mentioned: List[User | Member] = message.mentions
-    for user in users_mentioned:
-        user_id: int = user.id
-        user_name: str = user.name
-        save_data: UserSaveData = UserSaveData(
-            user_id=user_id, user_name=user_name)
-        save_data.is_grifter_supplier = True
-        del user_id
-        del user_name
-        del save_data
-    del users_mentioned
+    if message.reference is None:
+        return
+    referenced_message_id: int | None = message.reference.message_id
+    if referenced_message_id is None:
+        return
+    referenced_message: Message = await message.channel.fetch_message(
+        referenced_message_id)
+    referenced_message_text: str = referenced_message.content
+    if referenced_message_text.startswith("!suppliers"):
+        users_mentioned: List[User | Member] = message.mentions
+        grifter_suppliers.add(users_mentioned)
+        del users_mentioned
+        return
+    referenced_message_author: User | Member = referenced_message.author
+    referenced_message_author_id: int = referenced_message_author.id
+    if referenced_message_text.startswith("!forget"):
+        grifter_suppliers.remove(referenced_message_author)
+        return
+    message_text: str = message.content
+    user_supplied_grifter_sbcoin: bool = (
+        "Added" in message_text and
+        "sent" in referenced_message_text and
+        referenced_message_author_id == sbcoin_id)
+
+    user_supplied_grifter_this_coin: bool = (
+        "Added" in message_text and
+        "transferred" in referenced_message_text and
+        referenced_message_author_id == casino_house_id)
+
+    if user_supplied_grifter_sbcoin or user_supplied_grifter_this_coin:
+        # get the cached message in order to get the command invoker
+        referenced_message_full: Message = await message.channel.fetch_message(
+            referenced_message_id)
+        del referenced_message_id
+        referenced_message_full_interaction: MessageInteraction | None = (
+            referenced_message_full.interaction)
+        if referenced_message_full_interaction is None:
+            return
+        referenced_message_full_invoker: User | Member = (
+            referenced_message_full_interaction.user)
+        grifter_suppliers.add([referenced_message_full_invoker])
 # endregion
 
-
 # region Reaction
+
+
 @bot.event
 async def on_raw_reaction_add(payload: RawReactionActionEvent) -> None:
     """
@@ -3103,17 +3182,20 @@ async def transfer(interaction: Interaction, amount: int, user: Member) -> None:
     print(f"User {sender_id} is requesting to transfer "
           f"{amount} {coin_label_a} to user {receiver_id}...")
     balance: int | None = None
-    if amount <= 0:
-        message = "You cannot transfer 0 or a negative amount of coins."
+    if amount == 0:
+        message = "You cannot transfer 0 coins."
         await interaction.response.send_message(message, ephemeral=True)
         return
+    elif amount < 0:
+        message = "You cannot transfer a negative amount of coins."
+        await interaction.response.send_message(message, ephemeral=True)
     try:
         balance = blockchain.get_balance(user_unhashed=sender_id)
     except Exception as e:
         print(f"Error getting balance for user {sender} ({sender_id}): {e}")
         administrator: str = (await bot.fetch_user(administrator_id)).mention
-        await interaction.response.send_message("Error getting balance."
-                                                f"{administrator} pls fix.")
+        await interaction.response.send_message(
+            f"Error getting balance. {administrator} pls fix.")
     if balance is None:
         print(f"Balance is None for user {sender} ({sender_id}).")
         await interaction.response.send_message(f"You have 0 {coins}.")
@@ -3123,10 +3205,9 @@ async def transfer(interaction: Interaction, amount: int, user: Member) -> None:
               f"transfer {amount} {coin_label_a} to {sender} ({sender_id}). "
               f"Balance: {balance}.")
         coin_label_b: str = format_coin_label(balance)
-        await interaction.response.send_message(f"You do not have enough "
-                                                f"{coins}. You have {balance} "
-                                                f"{coin_label_b}.",
-                                                ephemeral=True)
+        await interaction.response.send_message(
+            f"You do not have enough {coins}. "
+            f"You have {balance} {coin_label_b}.", ephemeral=True)
         del coin_label_b
         return
     del balance
@@ -3663,6 +3744,8 @@ async def slots(interaction: Interaction,
         reinitialize_slot_machine()
         # Also update the bot configuration
         invoke_bot_configuration()
+        # Also reload the grifter suppliers
+        reinitialize_grifter_suppliers()
         await asyncio.sleep(4)
         # Remove user from active players
         if user_id in active_slot_machine_players:
@@ -3725,7 +3808,9 @@ async def slots(interaction: Interaction,
             starting_bonus_available = True
         else:
             # Check if the user has coins in GrifterSwap
-            is_grifter_supplier: bool | None = save_data.is_grifter_supplier
+            all_grifter_suppliers: List[int] = grifter_suppliers.suppliers
+            is_grifter_supplier: bool = user_id in all_grifter_suppliers
+            print(f"Is grifter supplier: {is_grifter_supplier}")
             if is_grifter_supplier:
                 message: str = (f"Welcome back! We give free coins to "
                                 "customers who do not have any. "
@@ -4125,17 +4210,28 @@ async def slots(interaction: Interaction,
         next_bonus_time_left: str = format_timespan(
             slot_machine.next_bonus_wait_seconds)
         invoker: str = user.mention
-        message: str = (f"{invoker} You're all out of {coins}!\n"
-                        f"Come back in {next_bonus_time_left} "
-                        "for a new starting bonus.")
-        del next_bonus_time_left
-        await interaction.followup.send(content=message,
-                                        ephemeral=should_use_ephemeral)
-        del message
-        next_bonus_point_in_time: float = (
-            time() + slot_machine.next_bonus_wait_seconds)
-        save_data.starting_bonus_available = next_bonus_point_in_time
-        del next_bonus_point_in_time
+        all_grifter_suppliers: List[int] = grifter_suppliers.suppliers
+        is_grifter_supplier: bool = user_id in all_grifter_suppliers
+        if is_grifter_supplier:
+            message = (f"{invoker} You're all out of {coins}!\n"
+                       "To customers who run out of coins, we usually give "
+                       "some for free. However, we request that you please "
+                       "delete your GrifterSwap account first.")
+            await interaction.followup.send(content=message,
+                                            ephemeral=should_use_ephemeral)
+            del message
+        else:
+            message: str = (f"{invoker} You're all out of {coins}!\n"
+                            f"Come back in {next_bonus_time_left} "
+                            "for a new starting bonus.")
+            del next_bonus_time_left
+            await interaction.followup.send(content=message,
+                                            ephemeral=should_use_ephemeral)
+            del message
+            next_bonus_point_in_time: float = (
+                time() + slot_machine.next_bonus_wait_seconds)
+            save_data.starting_bonus_available = next_bonus_point_in_time
+            del next_bonus_point_in_time
 
     if user_id in active_slot_machine_players:
         active_slot_machine_players.remove(user_id)

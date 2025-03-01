@@ -14,6 +14,8 @@ class BotConfig(TypedDict):
     casino_channel_id: int
     blockchain_name: str
     Blockchain_name: str
+    grifter_swap_id: int
+    sbcoin_id: int
 
 
 class Reels(TypedDict):
