@@ -2287,23 +2287,37 @@ class GrifterSuppliers:
                 print("No grifter suppliers found.")
         return suppliers
 
-    async def add(self, users: List[int]) -> None:
+    async def add(self, user: User | Member) -> None:
         """
         Add user IDs to the list of grifter suppliers.
         """
-        for user_id in users:
-            user: User = await bot.fetch_user(user_id)
-            user_name: str = user.name
-            del user
-            if user_id not in self.suppliers:
-                self.suppliers.append(user_id)
-                print(f"User {user_name} ({user_id}) added "
-                      "to the grifter suppliers registry.")
-            else:
-                print(f"User {user_name} ({user_id}) is already in the"
-                      "grifter suppliers registry.")
+        user_name: str = user.name
+        user_id: int = user.id
+        del user
+        if user_id not in self.suppliers:
+            self.suppliers.append(user_id)
+            print(f"User {user_name} ({user_id}) added "
+                    "to the grifter suppliers registry.")
+        else:
+            print(f"User {user_name} ({user_id}) is already in the"
+                    "grifter suppliers registry.")
         with open(self.file_name, "w") as file:
             json.dump({"suppliers": self.suppliers}, file)
+
+    async def replace(self, user_ids: List[int]) -> None:
+        """
+        Replace the list of grifter suppliers with a new list.
+        """
+        print("Replacing grifter suppliers registry...")
+        for user_id in user_ids:
+            user: User = await bot.fetch_user(user_id)
+            user_name: str = user.name
+            print(f"User {user_name} ({user_id}) will be added to the "
+                  "grifter suppliers registry.")
+        self.suppliers = user_ids
+        with open(self.file_name, "w") as file:
+            json.dump({"suppliers": self.suppliers}, file)
+        print("Grifter suppliers registry replaced.")
 
     def remove(self, user: User | Member) -> None:
         """
@@ -2320,8 +2334,6 @@ class GrifterSuppliers:
                   "grifter suppliers registry.")
         with open(self.file_name, "w") as file:
             json.dump({"suppliers": self.suppliers}, file)
-
-
 # endregion
 
 # region Flask funcs
@@ -3075,7 +3087,7 @@ async def on_message(message: Message) -> None:
             # await message.channel.send("An error occurred. "
             #                            f"{administrator} pls fix.")
             return
-        
+
     # Look for GrifterSwap messages
     message_author: User | Member = message.author
     message_author_id: int = message_author.id
@@ -3092,15 +3104,11 @@ async def on_message(message: Message) -> None:
     referenced_message_text: str = referenced_message.content
     if referenced_message_text.startswith("!suppliers"):
         users_mentioned: List[int] = message.raw_mentions
-        await grifter_suppliers.add(users_mentioned)
+        await grifter_suppliers.replace(users_mentioned)
         del users_mentioned
         return
     referenced_message_author: User | Member = referenced_message.author
     referenced_message_author_id: int = referenced_message_author.id
-    if referenced_message_text.startswith("!forget"):
-        # FIX Also check the main message text, if it says "You have been forgotten" or similar
-        grifter_suppliers.remove(referenced_message_author)
-        return
     message_text: str = message.content
     user_supplied_grifter_sbcoin: bool = (
         "Added" in message_text and
@@ -3123,9 +3131,7 @@ async def on_message(message: Message) -> None:
             return
         referenced_message_full_invoker: User | Member = (
             referenced_message_full_interaction.user)
-        referenced_message_full_invoker_id: int = (
-            referenced_message_full_invoker.id)
-        await grifter_suppliers.add([referenced_message_full_invoker_id])
+        await grifter_suppliers.add(referenced_message_full_invoker)
 # endregion
 
 # region Reaction
@@ -3805,7 +3811,7 @@ async def slots(interaction: Interaction,
     has_played_before: bool = save_data.has_visited_casino
     new_bonus_wait_complete: bool = (
         (isinstance(starting_bonus_available, float)) and
-         (time() >= starting_bonus_available))
+        (time() >= starting_bonus_available))
     if not has_played_before:
         starting_bonus_available = True
     elif (user_balance <= 0 or new_bonus_wait_complete):
@@ -3817,7 +3823,13 @@ async def slots(interaction: Interaction,
             message: str = (f"Welcome back! We give free coins to "
                             "customers who do not have any. "
                             "However, we request that you first "
-                            "delete your GrifterSwap account.")
+                            "delete your GrifterSwap account.\n"
+                            "Here's how you can do it:\n"
+                            "See your GrifterSwap balance with `!balance`, "
+                            "withdraw all your coins with \n"
+                            "`!withdraw <currency> <number>`, "
+                            "and then use `!suppliers` to prove you're no "
+                            "longer a supplier.")
             await interaction.response.send_message(
                 message, ephemeral=should_use_ephemeral)
             del message
@@ -4226,7 +4238,13 @@ async def slots(interaction: Interaction,
             message = (f"{invoker} You're all out of {coins}!\n"
                        "To customers who run out of coins, we usually give "
                        "some for free. However, we request that you please "
-                       "delete your GrifterSwap account first.")
+                       "delete your GrifterSwap account first.\n"
+                       "Here's how you can do it:\n"
+                       "See your GrifterSwap balance with `!balance`, "
+                       "withdraw all your coins with\n"
+                       "`!withdraw <currency> <number>`, "
+                       "and then use `!suppliers` to prove you're no longer "
+                       "a supplier.")
             await interaction.followup.send(content=message,
                                             ephemeral=should_use_ephemeral)
             del message
