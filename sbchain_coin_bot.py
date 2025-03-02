@@ -3827,7 +3827,7 @@ async def slots(interaction: Interaction,
                             "Here's how you can do it:\n"
                             "See your GrifterSwap balance with `!balance`, "
                             "withdraw all your coins with \n"
-                            "`!withdraw <currency> <number>`, "
+                            "`!withdraw <currency> <amount>`, "
                             "and then use `!suppliers` to prove you're no "
                             "longer a supplier.")
             await interaction.response.send_message(
@@ -4242,7 +4242,7 @@ async def slots(interaction: Interaction,
                        "Here's how you can do it:\n"
                        "See your GrifterSwap balance with `!balance`, "
                        "withdraw all your coins with\n"
-                       "`!withdraw <currency> <number>`, "
+                       "`!withdraw <currency> <amount>`, "
                        "and then use `!suppliers` to prove you're no longer "
                        "a supplier.")
             await interaction.followup.send(content=message,
