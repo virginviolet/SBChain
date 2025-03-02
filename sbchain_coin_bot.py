@@ -3075,7 +3075,8 @@ async def on_message(message: Message) -> None:
             # await message.channel.send("An error occurred. "
             #                            f"{administrator} pls fix.")
             return
-    # Look for GrifterSwap reply to a message with "!suppliers"
+        
+    # Look for GrifterSwap messages
     message_author: User | Member = message.author
     message_author_id: int = message_author.id
     del message_author
@@ -3097,6 +3098,7 @@ async def on_message(message: Message) -> None:
     referenced_message_author: User | Member = referenced_message.author
     referenced_message_author_id: int = referenced_message_author.id
     if referenced_message_text.startswith("!forget"):
+        # FIX Also check the main message text, if it says "You have been forgotten" or similar
         grifter_suppliers.remove(referenced_message_author)
         return
     message_text: str = message.content
@@ -3801,9 +3803,29 @@ async def slots(interaction: Interaction,
         user_balance = 0
 
     has_played_before: bool = save_data.has_visited_casino
+    new_bonus_wait_complete: bool = (
+        (isinstance(starting_bonus_available, float)) and
+         (time() >= starting_bonus_available))
     if not has_played_before:
         starting_bonus_available = True
-    elif (user_balance <= 0) and (starting_bonus_available is False):
+    elif (user_balance <= 0 or new_bonus_wait_complete):
+        # Check if the user has coins in GrifterSwap
+        all_grifter_suppliers: List[int] = grifter_suppliers.suppliers
+        is_grifter_supplier: bool = user_id in all_grifter_suppliers
+        print(f"Is grifter supplier: {is_grifter_supplier}")
+        if is_grifter_supplier:
+            message: str = (f"Welcome back! We give free coins to "
+                            "customers who do not have any. "
+                            "However, we request that you first "
+                            "delete your GrifterSwap account.")
+            await interaction.response.send_message(
+                message, ephemeral=should_use_ephemeral)
+            del message
+            if user_id in active_slot_machine_players:
+                active_slot_machine_players.remove(user_id)
+            return
+
+    if (user_balance <= 0) and (starting_bonus_available is False):
         # If starting_bonus_available is a float, the above conditional
         # will be false
         when_last_bonus_received: float | None = (
@@ -3811,21 +3833,6 @@ async def slots(interaction: Interaction,
         if when_last_bonus_received is None:
             starting_bonus_available = True
         else:
-            # Check if the user has coins in GrifterSwap
-            all_grifter_suppliers: List[int] = grifter_suppliers.suppliers
-            is_grifter_supplier: bool = user_id in all_grifter_suppliers
-            print(f"Is grifter supplier: {is_grifter_supplier}")
-            if is_grifter_supplier:
-                message: str = (f"Welcome back! We give free coins to "
-                                "customers who do not have any. "
-                                "However, we request that you first "
-                                "delete your GrifterSwap account.")
-                await interaction.response.send_message(
-                    message, ephemeral=should_use_ephemeral)
-                del message
-                if user_id in active_slot_machine_players:
-                    active_slot_machine_players.remove(user_id)
-                return
             min_seconds_between_bonuses: int = (
                 slot_machine.next_bonus_wait_seconds)
             when_eligible_for_bonus: float = (
@@ -3851,7 +3858,7 @@ async def slots(interaction: Interaction,
         # will be false
         seconds_left = int(starting_bonus_available - time())
         time_left: str = format_timespan(seconds_left)
-        message: str = (f"You are out of {Coins}. Come back in {time_left} "
+        message: str = (f"You are out of {coins}. Come back in {time_left} "
                         "to get some coins.")
         # Use ephemeral unless explicitly set to False
         if private_room is False:
@@ -3865,9 +3872,8 @@ async def slots(interaction: Interaction,
         return
 
     should_give_bonus: bool = (
-        (starting_bonus_available == True) or
-        ((isinstance(starting_bonus_available, float)) and
-         (time() >= starting_bonus_available)))
+        new_bonus_wait_complete or
+        starting_bonus_available == True)
     if should_give_bonus:
         # Send message to inform user of starting bonus
         starting_bonus_awards: Dict[int, int] = {
