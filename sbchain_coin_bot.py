@@ -4155,7 +4155,8 @@ async def slots(interaction: Interaction,
     if (total_return > 0):
         collect_message = (f"-# You collect {total_return} {coin_label_tr}.")
     else:
-        collect_message = None
+        # collect_message = None
+        collect_message = "So close!"
     del coin_label_nr
 
     # TODO Move code to SlotMachine.make_message
