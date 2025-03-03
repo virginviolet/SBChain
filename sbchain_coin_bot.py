@@ -3812,9 +3812,10 @@ async def slots(interaction: Interaction,
     new_bonus_wait_complete: bool = (
         (isinstance(starting_bonus_available, float)) and
         (time() >= starting_bonus_available))
+    is_grifter_supplier = False
     if not has_played_before:
         starting_bonus_available = True
-    elif (user_balance <= 0 or new_bonus_wait_complete):
+    elif (user_balance <= 0):
         # Check if the user has coins in GrifterSwap
         all_grifter_suppliers: List[int] = grifter_suppliers.suppliers
         is_grifter_supplier: bool = user_id in all_grifter_suppliers
@@ -3884,8 +3885,9 @@ async def slots(interaction: Interaction,
         return
 
     should_give_bonus: bool = (
-        new_bonus_wait_complete or
-        starting_bonus_available == True)
+        is_grifter_supplier == False and
+        (new_bonus_wait_complete or
+        starting_bonus_available == True))
     if should_give_bonus:
         # Send message to inform user of starting bonus
         starting_bonus_awards: Dict[int, int] = {
