@@ -3571,6 +3571,20 @@ async def slots(interaction: Interaction,
     # TODO Add TOS parameter
     # TODO Add service parameter
     # IMPROVE Make incompatible parameters not selectable together
+    def grifter_supplier_check() -> bool:
+        """
+        Checks if the invoker is a Grifter Supplier and sends a message if they
+        are.
+        """
+        # Check if the user has coins in GrifterSwap
+        all_grifter_suppliers: List[int] = grifter_suppliers.suppliers
+        is_grifter_supplier: bool = user_id in all_grifter_suppliers
+        print(f"Is grifter supplier: {is_grifter_supplier}")
+        if is_grifter_supplier:
+            return True
+        else:
+            return False
+        
     if private_room:
         should_use_ephemeral = True
     else:
@@ -3816,27 +3830,28 @@ async def slots(interaction: Interaction,
     if not has_played_before:
         starting_bonus_available = True
     elif (user_balance <= 0):
-        # Check if the user has coins in GrifterSwap
-        all_grifter_suppliers: List[int] = grifter_suppliers.suppliers
-        is_grifter_supplier: bool = user_id in all_grifter_suppliers
-        print(f"Is grifter supplier: {is_grifter_supplier}")
+        is_grifter_supplier = grifter_supplier_check()
         if is_grifter_supplier:
-            message: str = (f"Welcome back! We give free coins to "
-                            "customers who do not have any. "
-                            "However, we request that you first "
-                            "delete your GrifterSwap account.\n"
-                            "Here's how you can do it:\n"
-                            "See your GrifterSwap balance with `!balance`, "
-                            "withdraw all your coins with \n"
-                            "`!withdraw <currency> <amount>`, "
-                            "and then use `!suppliers` to prove you're no "
-                            "longer a supplier.")
-            await interaction.response.send_message(
-                message, ephemeral=should_use_ephemeral)
-            del message
-            if user_id in active_slot_machine_players:
-                active_slot_machine_players.remove(user_id)
-            return
+            message: str = (
+                f"Welcome back! We give free coins to customers who do not have "
+                "any. However, we request that you first delete your GrifterSwap "
+                "account.\n"
+                "Here's how you can do it:\n"
+                "See your GrifterSwap balance with `!balance`, withdraw all your "
+                "coins with \n"
+                "`!withdraw <currency> <amount>`, and then use `!suppliers` to "
+                "prove you're no longer a supplier.")
+            # Check if the user has coins in GrifterSwap
+            all_grifter_suppliers: List[int] = grifter_suppliers.suppliers
+            is_grifter_supplier: bool = user_id in all_grifter_suppliers
+            print(f"Is grifter supplier: {is_grifter_supplier}")
+            if is_grifter_supplier:
+                await interaction.response.send_message(
+                    message, ephemeral=should_use_ephemeral)
+                del message
+                if user_id in active_slot_machine_players:
+                    active_slot_machine_players.remove(user_id)
+                return
 
     if (user_balance <= 0) and (starting_bonus_available is False):
         # If starting_bonus_available is a float, the above conditional
@@ -3884,10 +3899,13 @@ async def slots(interaction: Interaction,
         active_slot_machine_players.remove(user_id)
         return
 
+    main_bonus_requirements_passed: bool = (
+        new_bonus_wait_complete or
+        starting_bonus_available == True)
+    if main_bonus_requirements_passed:
+        is_grifter_supplier = grifter_supplier_check()
     should_give_bonus: bool = (
-        is_grifter_supplier == False and
-        (new_bonus_wait_complete or
-        starting_bonus_available == True))
+        main_bonus_requirements_passed and not is_grifter_supplier)
     if should_give_bonus:
         # Send message to inform user of starting bonus
         starting_bonus_awards: Dict[int, int] = {
