@@ -1,5 +1,5 @@
-from typing import Dict, TypedDict, List
 from discord import PartialEmoji
+from typing import Dict, TypedDict, List
 
 
 class BotConfig(TypedDict):
@@ -16,6 +16,8 @@ class BotConfig(TypedDict):
     Blockchain_name: str
     grifter_swap_id: int
     sbcoin_id: int
+    auto_approve_transfer_limit: int
+    aml_office_thread_id: int
 
 
 class Reels(TypedDict):
@@ -71,3 +73,13 @@ class SaveData(TypedDict):
     when_last_bonus_received: float | None
     reaction_message_received: bool
     mining_messages_enabled: bool
+
+
+class TransactionRequest(TypedDict):
+    sender_id: int
+    receiver_id: int
+    amount: int
+    request_timestamp: float
+    channel_id: int
+    message_id: int
+    purpose: str

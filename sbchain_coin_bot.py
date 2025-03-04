@@ -26,14 +26,16 @@ from time import sleep, time
 from datetime import datetime
 from humanfriendly import format_timespan
 from discord import (Guild, Intents, Interaction, Member, Message, Client,
-                     Emoji, MessageInteraction, PartialEmoji, Role, User, TextChannel, VoiceChannel,
-                     app_commands, utils, CategoryChannel, ForumChannel,
-                     StageChannel, Thread, AllowedMentions)
+                     Emoji, MessageInteraction, PartialEmoji, Role, User,
+                     TextChannel, VoiceChannel, app_commands, utils,
+                     CategoryChannel, ForumChannel, StageChannel, DMChannel,
+                     GroupChannel, Thread, AllowedMentions, InteractionMessage)
 from discord.app_commands import AppCommand
 from discord.abc import PrivateChannel
 from discord.ui import View, Button
 from discord.ext import commands
 from discord.raw_models import RawReactionActionEvent
+from discord.utils import MISSING
 from os import environ as os_environ, getenv, makedirs
 from os.path import exists
 from dotenv import load_dotenv
@@ -47,7 +49,7 @@ from typing import (Dict, KeysView, List, LiteralString, NoReturn, TextIO, cast,
 from sbchain_coin_bot_types import (BotConfig, Reels, ReelSymbol,
                                     ReelResult, ReelResults,
                                     SpinEmojis, SlotMachineConfig,
-                                    SaveData)
+                                    SaveData, TransactionRequest)
 # endregion
 
 # region Bot setup
@@ -317,19 +319,18 @@ class Log:
         with open(self.file_name, "w"):
             pass
 
-    def log(self, line: str, timestamp: float) -> None:
+    def format_timestamp(self, timestamp: float) -> str:
         """
-        Logs a line of text with a timestamp to a file.
+        Formats a Unix timestamp to a localized human-readable format.
+
         Args:
-            line: The line of text to log.
-            timestamp: The Unix timestamp that will be converted to a
-                        human-readable format and prepended to the line.
+            timestamp: The Unix timestamp to format.
         Returns:
-            None
+            str: The formatted timestamp.
         """
         if self.time_zone is None:
             # Use local time zone
-            timestamp_friendly = (
+            timestamp_friendly: str = (
                 datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S"))
         else:
             # Convert Unix timestamp to datetime object
@@ -343,6 +344,21 @@ class Log:
             # Format the timestamp
             timestamp_friendly: str = (
                 timestamp_dt.strftime("%Y-%m-%d %H:%M:%S"))
+
+        return timestamp_friendly
+
+    def log(self, line: str, timestamp: float) -> None:
+        """
+        Logs a line of text with a timestamp to a file.
+        Args:
+            line: The line of text to log.
+            timestamp: The Unix timestamp that will be converted to a
+                        human-readable format and prepended to the line.
+        Returns:
+            None
+        """
+
+        timestamp_friendly: str = self.format_timestamp(timestamp)
 
         # Create the log file if it doesn't exist
         if not exists(self.file_name):
@@ -412,7 +428,9 @@ class BotConfiguration:
             "blockchain_name": "blockchain",
             "Blockchain_name": "Blockchain",
             "grifter_swap_id": 0,
-            "sbcoin_id": 0
+            "sbcoin_id": 0,
+            "auto_approve_transfer_limit": 20,
+            "aml_office_thread_id": 0
         }
         attributes_set = False
         while attributes_set is False:
@@ -440,6 +458,10 @@ class BotConfiguration:
                     self.configuration["grifter_swap_id"])
                 self.sbcoin_id: int = (
                     self.configuration["sbcoin_id"])
+                self.auto_approve_transfer_limit: int = (
+                    self.configuration["auto_approve_transfer_limit"])
+                self.aml_office_thread_id: int = (
+                    self.configuration["aml_office_thread_id"])
                 attributes_set = True
             except KeyError as e:
                 print(f"ERROR: Missing key in bot configuration: {e}\n"
@@ -1983,13 +2005,11 @@ class StartingBonusView(View):
         clicker_id: int = interaction.user.id
         if clicker_id != self.invoker_id:
             await interaction.response.send_message(
-                "You cannot role the die for someone else!", ephemeral=True)
+                "You cannot roll the die for someone else!", ephemeral=True)
         else:
             self.button_clicked = True
             self.die_button.disabled = True
-            await interaction.response.edit_message(
-                view=self)
-
+            await interaction.response.edit_message(view=self)
             die_roll: int = random.randint(1, 6)
             starting_bonus: int = self.starting_bonus_awards[die_roll]
             message: str = (
@@ -2027,8 +2047,8 @@ class StartingBonusView(View):
         self.die_button.disabled = True
         message = ("You took too long to roll the die. When you're "
                    "ready, you may run the command again.")
-        await self.interaction.edit_original_response(content=message,
-                                                      view=self)
+        await self.interaction.edit_original_response(
+            content=message, view=self)
         del message
 # endregion
 
@@ -2255,6 +2275,108 @@ class SlotMachineView(View):
         # all reels are stopped
 # endregion
 
+# region AML view
+class AmlView(View):
+    def __init__(self,
+                 interaction: Interaction,
+                 initial_message: str) -> None:
+        """
+        Initialize the AmlView instance.
+
+        Args:
+            interaction: The interaction instance.
+
+        Attributes:
+            interaction: The interaction instance.
+        """
+        super().__init__(timeout=60)
+        invoker: User | Member = interaction.user
+        self.invoker_id: int = invoker.id
+        self.invoker_id: int = interaction.user.id
+        self.interaction: Interaction = interaction
+        self.initial_message: str = initial_message
+        self.followup_message: Message | None = None
+        self.approve_button: Button[View] = Button(
+            disabled=False,
+            label="Approve",
+            custom_id="aml_approve"
+        )
+        self.approve_button.callback = lambda interaction: (
+            self.on_button_click(
+                interaction=interaction, button=self.approve_button))
+        self.decline_button: Button[View] = Button(
+            disabled=False,
+            label="Decline",
+            custom_id="aml_decline"
+        )
+        self.decline_button.callback = lambda interaction: (
+            self.on_button_click(
+                interaction=interaction, button=self.decline_button))
+        self.add_item(self.approve_button)
+        self.add_item(self.decline_button)
+        self.approved: bool = False
+
+    async def on_button_click(self,
+                              interaction: Interaction,
+                              button: Button[View]) -> None:
+        """
+        Handles the event when a button is clicked.
+
+        Args:
+            interaction: The interaction object.
+        """
+        clicker: User | Member = interaction.user
+        clicker_id: int = clicker.id
+        if clicker_id != self.invoker_id:
+            await interaction.response.send_message(
+                "This is not your AML terminal.",
+                ephemeral=True)
+        else:
+            self.approve_button.disabled = True
+            self.decline_button.disabled = True
+            await interaction.response.edit_message(view=self)
+            message_content: str = f"{self.initial_message}\n"
+            if button == self.approve_button:
+                message_content += (f"-# The {Coin} Bank has approved "
+                                    "the transaction.")
+                self.approved = True
+            else:
+                message_content += (f"-# The {Coin} Bank has declined "
+                                    "the transaction.")
+            if self.followup_message is None:
+                await self.interaction.edit_original_response(
+                    content=message_content, view=self,
+                    allowed_mentions=AllowedMentions.none())
+            else:
+                message_id: int = self.followup_message.id
+                await self.interaction.followup.edit_message(
+                    message_id=message_id,
+                    content=message_content, view=self,
+                    allowed_mentions=AllowedMentions.none())
+            self.stop()
+
+    async def on_timeout(self) -> None:
+        """
+        Handles the timeout event for the view.
+
+        This method is called when the user takes too long to respond.
+        It disables the buttons and sends a message to the user indicating
+        that they took too long and can run the command again when ready.
+        """
+        self.approve_button.disabled = True
+        self.decline_button.disabled = True
+        message_content: str = ("The AML officer has left the terminal.")
+        if self.followup_message is None:
+            await self.interaction.edit_original_response(
+                content=message_content, view=self)
+        else:
+            message_id: int = self.followup_message.id
+            await self.interaction.followup.edit_message(
+                message_id=message_id,
+                content=message_content, view=self)
+        del message_content
+# endregion
+
 # region Grifter Suppliers
 
 
@@ -2334,6 +2456,57 @@ class GrifterSuppliers:
                   "grifter suppliers registry.")
         with open(self.file_name, "w") as file:
             json.dump({"suppliers": self.suppliers}, file)
+# endregion
+
+# region TransfersWaitingApproval
+class TransfersWaitingApproval:
+    """
+    Handles transfers waiting for approval.
+    """
+
+    def __init__(self) -> None:
+        self.file_name: str = "data/transfers_waiting_approval.json"
+        self.transfers: List[TransactionRequest] = self.load()
+    
+    def load(self) -> List[TransactionRequest]:
+        """
+        Loads the transfer requests from the JSON file.
+        """
+        # Create missing directories
+        directories: str = self.file_name[:self.file_name.rfind("/")]
+        makedirs(directories, exist_ok=True)
+        if not exists(self.file_name):
+            print("Transfers waiting approval file not found.")
+            return []
+
+        # Load the data from the file
+        with open(self.file_name, "r") as file:
+            transfers_json: Dict[str, List[TransactionRequest]] = (
+                json.load(file))
+            transfers: List[TransactionRequest] = (
+                transfers_json.get("transfers", []))
+            if len(transfers) == 0:
+                print("No transfers waiting approval found.")
+        return transfers
+    
+    def add(self, transfer: TransactionRequest) -> None:
+        """
+        Add a transfer to the list of transfers waiting for approval.
+        """
+        self.transfers.append(transfer)
+        with open(self.file_name, "w") as file:
+            json.dump({"transfers": self.transfers}, file)
+    
+    def remove(self, transfer: TransactionRequest) -> None:
+        """
+        Remove a transfer from the list of transfers waiting for approval.
+        """
+        if transfer in self.transfers:
+            self.transfers.remove(transfer)
+            with open(self.file_name, "w") as file:
+                json.dump({"transfers": self.transfers}, file)
+            # print("Transfer removed from the approval list.")
+
 # endregion
 
 # region Flask funcs
@@ -2458,6 +2631,13 @@ def reinitialize_grifter_suppliers() -> None:
     """
     global grifter_suppliers
     grifter_suppliers = GrifterSuppliers()
+
+def reinitialize_transfers_waiting_approval() -> None:
+    """
+    Initializes the transfers waiting for approval.
+    """
+    global transfers_waiting_approval
+    transfers_waiting_approval = TransfersWaitingApproval()
 # endregion
 
 # region CP start
@@ -2843,6 +3023,221 @@ async def add_block_transaction(
     print("Transaction added to blockchain.")
 # endregion
 
+# region Transfer
+async def transfer_coins(sender: Member | User,
+                         receiver: Member | User,
+                         amount: int,
+                         method: str,
+                         channel_id: int,
+                         purpose: str | None = None,
+                         interaction: Interaction | None = None) -> None:
+    """
+    Transfers coins from one user to another.
+    Only pass the interaction parameter if the transfer is immediately initiated
+    by the one who wishes to make a transfer.
+    """
+    if interaction:
+        channel = interaction.channel
+    else:
+        channel: (VoiceChannel | StageChannel | ForumChannel | TextChannel |
+            CategoryChannel | Thread | PrivateChannel | None) = (
+            bot.get_channel(channel_id))
+        
+    async def send_message(message_text: str,
+                           ephemeral: bool = False,
+                           allowed_mentions: AllowedMentions = MISSING) -> None:
+        if interaction is None:
+            if channel is None:
+                print("ERROR: Channel is None.")
+                return
+            elif isinstance(channel,
+                    (PrivateChannel, ForumChannel, CategoryChannel)):
+                # [ ] Test
+                print(f"ERROR: Channel is a {type(channel).__name__}.")
+                return
+            await channel.send(content=message_text)
+        else:
+            if not has_responded:
+                await interaction.response.send_message(
+                    content=message_text,
+                    ephemeral=ephemeral,
+                    allowed_mentions=allowed_mentions)
+            else:
+                await interaction.followup.send(
+                    content=message_text,
+                    ephemeral=ephemeral,
+                    allowed_mentions=allowed_mentions)
+
+    has_responded: bool = False
+    sender_id: int = sender.id
+    receiver_id: int = receiver.id
+    coin_label_a: str = format_coin_label(amount)
+    sender_mention: str = sender.mention
+    if not interaction:
+        await send_message(f"{sender_mention} Your transfer request "
+                           "has been approved.")
+        has_responded = True
+    print(f"User {sender_id} is attempting to transfer "
+          f"{amount} {coin_label_a} to user {receiver_id}...")
+    balance: int | None = None
+    if amount == 0:
+        message_content = "You cannot transfer 0 coins."
+        await send_message(message_content, ephemeral=True)
+        del message_content
+        return
+    elif amount < 0:
+        message_content = "You cannot transfer a negative amount of coins."
+        await send_message(message_content, ephemeral=True)
+        del message_content
+        return
+    
+    try:
+        balance = blockchain.get_balance(user_unhashed=sender_id)
+    except Exception as e:
+        print(f"Error getting balance for user {sender} ({sender_id}): {e}")
+        administrator: str = (await bot.fetch_user(administrator_id)).mention
+        await send_message(f"Error getting balance. {administrator} pls fix.")
+    if balance is None:
+        print(f"Balance is None for user {sender} ({sender_id}).")
+        await send_message(f"You have 0 {coins}.")
+        return
+    if balance < amount:
+        print(f"{sender} ({sender_id}) does not have enough {coins} to "
+              f"transfer {amount} {coin_label_a} to {sender} ({sender_id}). "
+              f"Balance: {balance}.")
+        coin_label_b: str = format_coin_label(balance)
+        await send_message(
+            f"You do not have enough {coins}. "
+            f"You have {balance} {coin_label_b}.", ephemeral=True)
+        del coin_label_b
+        return
+    del balance
+
+    if interaction:
+        auto_approve_transfer_limit: int = (
+            configuration.auto_approve_transfer_limit)
+        if amount > auto_approve_transfer_limit:
+            print(f"Transfer amount exceeds auto-approval limit of "
+                f"{auto_approve_transfer_limit}.")
+            receiver_mention: str = receiver.mention
+            if purpose is None:
+                message_content: str = (
+                    f"Anti-money laundering (AML) policies requires us to "
+                    "manually approve this transaction. "
+                    "Please state your purpose of transferring "
+                    f"{amount} {coin_label_a} to {receiver_mention}.")
+                await interaction.response.send_message(message_content)
+                del message_content
+                def check(message: Message) -> bool:
+                    message_author: User | Member = message.author
+                    return message_author == sender
+                try:
+                    purpose_message: Message = await bot.wait_for(
+                        "message", timeout=60, check=check)
+                except asyncio.TimeoutError:
+                    message_content = "Come back when you have a purpose."
+                    await interaction.followup.send(message_content)
+                    del message_content
+                    return
+                purpose = purpose_message.content
+            else:
+                # Need to defer to get a message id
+                # (used to make a message link in /aml)
+                await interaction.response.defer()
+            request_timestamp: float = time()
+            interaction_message: InteractionMessage = (
+                await interaction.original_response())
+            interaction_message_id: int = interaction_message.id
+            awaiting_approval_message_content: str = (
+                f"A request for transferring {amount} {coin_label_a} "
+                f"to {receiver_mention} has been "
+                "sent for approval.")
+            if channel is None:
+                print("ERROR: Channel is None.")
+                return
+            transaction_request: TransactionRequest = {
+                "sender_id": sender_id,
+                "receiver_id": receiver_id,
+                "amount": amount,
+                "request_timestamp": request_timestamp,
+                "channel_id": channel_id,
+                "message_id": interaction_message_id,
+                "purpose": purpose
+            }
+            transfers_waiting_approval.add(transaction_request)
+            await interaction.followup.send(
+                awaiting_approval_message_content,
+                allowed_mentions=AllowedMentions.none())
+            aml_office_thread_id: int = configuration.aml_office_thread_id
+            aml_office_thread: (
+                VoiceChannel | StageChannel | ForumChannel | TextChannel |
+                CategoryChannel | PrivateChannel |
+                Thread) = await bot.fetch_channel(aml_office_thread_id)
+            if isinstance(aml_office_thread, Thread):
+                guild: Guild | None = interaction.guild
+                if guild is None:
+                    print("ERROR: Guild is None.")
+                    return
+                aml_officer: Role | None = None
+                role_names: List[str] = [
+                    "Anti-Money Laundering Officer",
+                    "Anti-money laundering officer",
+                    "anti_money_laundering_officer",
+                    "AML Officer", "AML officer" "aml_officer"]
+                for role_name in role_names:
+                    aml_officer = utils.get(guild.roles, name=role_name)
+                    if aml_officer is not None:
+                        break
+                if aml_officer is None:
+                    raise Exception("aml_officer is None.")
+                aml_officer_mention: str = aml_officer.mention
+                aml_office_message: str = (aml_officer_mention +
+                                           awaiting_approval_message_content)
+                await aml_office_thread.send(
+                    aml_office_message,
+                    allowed_mentions=AllowedMentions.none())
+            log_message: str = (
+                f"A request for transferring {amount} {coin_label_a} "
+                f"to {receiver_mention} for the purpose of \"{purpose}\" has "
+                "been sent for approval.")
+            log.log(log_message, request_timestamp)
+            del log_message
+            return
+    
+    await add_block_transaction(
+        blockchain=blockchain,
+        sender=sender,
+        receiver=receiver,
+        amount=amount,
+        method=method
+    )
+    last_block: sbchain.Block | None = blockchain.get_last_block()
+    if last_block is None:
+        print("ERROR: Last block is None.")
+        administrator: str = (await bot.fetch_user(administrator_id)).mention
+        await send_message(f"Error transferring {coins}. "
+                           f"{administrator} pls fix.")
+        await terminate_bot()
+    timestamp: float = last_block.timestamp
+    log.log(line=f"{sender} ({sender_id}) transferred {amount} {coin_label_a} "
+            f"to {receiver} ({receiver_id}).",
+            timestamp=timestamp)
+    sender_mention: str = sender.mention
+    receiver_mention: str = receiver.mention
+    allowed_pings = AllowedMentions(users=[receiver])
+    await send_message(
+        f"{sender_mention} transferred "
+        f"{amount} {coin_label_a} "
+        f"to {receiver_mention}'s account.",
+        allowed_mentions=allowed_pings)
+    del sender
+    del sender_id
+    del receiver
+    del receiver_id
+    del amount
+    del coin_label_a
+# endregion
+
 # region Terminate bot
 
 
@@ -2977,6 +3372,7 @@ invoke_bot_configuration()
 
 slot_machine = SlotMachine()
 grifter_suppliers = GrifterSuppliers()
+transfers_waiting_approval = TransfersWaitingApproval()
 
 log = Log(time_zone="Canada/Central")
 
@@ -3177,8 +3573,12 @@ async def on_raw_reaction_add(payload: RawReactionActionEvent) -> None:
 @bot.tree.command(name="transfer",
                   description=f"Transfer {coins} to another user")
 @app_commands.describe(amount=f"Amount of {coins} to transfer",
-                       user=f"User to transfer the {coins} to")
-async def transfer(interaction: Interaction, amount: int, user: Member) -> None:
+                       user=f"User to transfer the {coins} to",
+                       purpose="Purpose of the transfer")
+async def transfer(interaction: Interaction,
+                   amount: int,
+                   user: Member,
+                   purpose: str | None = None) -> None:
     """
     Transfer a specified amount of coins to another user.
 
@@ -3189,73 +3589,19 @@ async def transfer(interaction: Interaction, amount: int, user: Member) -> None:
     sender_id: int = sender.id
     receiver: Member = user
     receiver_id: int = receiver.id
-    coin_label_a: str = format_coin_label(amount)
-    print(f"User {sender_id} is requesting to transfer "
-          f"{amount} {coin_label_a} to user {receiver_id}...")
-    balance: int | None = None
-    if amount == 0:
-        message = "You cannot transfer 0 coins."
-        await interaction.response.send_message(message, ephemeral=True)
+    channel: VoiceChannel | StageChannel | TextChannel | ForumChannel | CategoryChannel | Thread | DMChannel | GroupChannel | None = interaction.channel
+    if channel is None:
+        print("ERROR: Channel is None.")
         return
-    elif amount < 0:
-        message = "You cannot transfer a negative amount of coins."
-        await interaction.response.send_message(message, ephemeral=True)
-        return
-    try:
-        balance = blockchain.get_balance(user_unhashed=sender_id)
-    except Exception as e:
-        print(f"Error getting balance for user {sender} ({sender_id}): {e}")
-        administrator: str = (await bot.fetch_user(administrator_id)).mention
-        await interaction.response.send_message(
-            f"Error getting balance. {administrator} pls fix.")
-    if balance is None:
-        print(f"Balance is None for user {sender} ({sender_id}).")
-        await interaction.response.send_message(f"You have 0 {coins}.")
-        return
-    if balance < amount:
-        print(f"{sender} ({sender_id}) does not have enough {coins} to "
-              f"transfer {amount} {coin_label_a} to {sender} ({sender_id}). "
-              f"Balance: {balance}.")
-        coin_label_b: str = format_coin_label(balance)
-        await interaction.response.send_message(
-            f"You do not have enough {coins}. "
-            f"You have {balance} {coin_label_b}.", ephemeral=True)
-        del coin_label_b
-        return
-    del balance
-
-    await add_block_transaction(
-        blockchain=blockchain,
-        sender=sender,
-        receiver=receiver,
-        amount=amount,
-        method="transfer"
-    )
-    last_block: sbchain.Block | None = blockchain.get_last_block()
-    if last_block is None:
-        print("ERROR: Last block is None.")
-        administrator: str = (await bot.fetch_user(administrator_id)).mention
-        await interaction.response.send_message(f"Error transferring {coins}. "
-                                                f"{administrator} pls fix.")
-        await terminate_bot()
-    timestamp: float = last_block.timestamp
-    log.log(line=f"{sender} ({sender_id}) transferred {amount} {coin_label_a} "
-            f"to {receiver} ({receiver_id}).",
-            timestamp=timestamp)
-    sender_mention: str = sender.mention
-    receiver_mention: str = receiver.mention
-    allowed_pings = AllowedMentions(users=[receiver])
-    await interaction.response.send_message(
-        f"{sender_mention} transferred "
-        f"{amount} {coin_label_a} "
-        f"to {receiver_mention}'s account.",
-        allowed_mentions=allowed_pings)
-    del sender
-    del sender_id
-    del receiver
-    del receiver_id
-    del amount
-    del coin_label_a
+    channel_id: int = channel.id
+    await transfer_coins(sender=sender,
+                         receiver=receiver,
+                         amount=amount,
+                         purpose=purpose,
+                         method="transfer",
+                         channel_id=channel_id,
+                         interaction=interaction,)
+    del sender, sender_id, receiver, receiver_id, amount
 # endregion
 
 # region /balance
@@ -3358,7 +3704,7 @@ async def reels(interaction: Interaction,
         utils.get(invoker_roles, name="Administrator"))
     technician_role: Role | None = (
         utils.get(invoker_roles, name="Slot Machine Technician"))
-    if administrator_role is None and technician_role is None:
+    if technician_role is None and administrator_role is None:
         # TODO Maybe let other users see the reels
         message: str = ("Only slot machine technicians may look at the reels.")
         await interaction.followup.send(message, ephemeral=True)
@@ -3770,8 +4116,9 @@ async def slots(interaction: Interaction,
         reinitialize_slot_machine()
         # Also update the bot configuration
         invoke_bot_configuration()
-        # Also reload the grifter suppliers
+        # Also reload the other files
         reinitialize_grifter_suppliers()
+        reinitialize_transfers_waiting_approval()
         await asyncio.sleep(4)
         # Remove user from active players
         if user_id in active_slot_machine_players:
@@ -4382,16 +4729,141 @@ async def about_coin(interaction: Interaction) -> None:
                     "type `/slots show_help: True`.")
     await interaction.response.send_message(message, ephemeral=True)
     del message
-
 # endregion
 
+# region /aml
+@bot.tree.command(name="aml",
+                  description="Anti-money laundering workstation")
+async def aml(interaction: Interaction) -> None:
+    """
+    Command to approve large transactions.
+    """
+    invoker: User | Member = interaction.user
+    invoker_name: str = invoker.name
+    invoker_id: int = invoker.id
+    invoker_roles: List[Role] = cast(Member, invoker).roles
+    aml_officer_role: Role | None = utils.get(invoker_roles, name="AML Officer")
+    if aml_officer_role is None:
+        message_content: str = "Only AML officers can approve large transactions."
+        await interaction.response.send_message(message_content)
+        del message_content
+        return
+    transfers_list: List[TransactionRequest] = transfers_waiting_approval.load()
+    has_sent_message = False
+    for transfer in transfers_list:
+        sender_id: int = transfer["sender_id"]
+        sender: User | None = bot.get_user(sender_id)
+        if sender is None:
+            print(f"ERROR: Could not get user with ID {transfer['sender_id']}")
+            continue
+        sender_mention: str = sender.mention
+        sender_id: int = transfer["sender_id"]
+        receiver_id: int = transfer["receiver_id"]
+        receiver: User | None = bot.get_user(receiver_id)
+        if receiver is None:
+            print("ERROR: Could not get user "
+                  f"with ID {transfer['receiver_id']}")
+            continue
+        receiver_mention: str = receiver.mention
+        amount: int = transfer["amount"]
+        channel_id: int = transfer["channel_id"]
+        channel: (VoiceChannel | StageChannel | ForumChannel | TextChannel |
+        CategoryChannel | Thread | PrivateChannel
+        | None) = bot.get_channel(channel_id)
+        if channel is None:
+            print("ERROR: Channel is None.")
+            return
+        elif isinstance(channel,
+                (PrivateChannel, ForumChannel, CategoryChannel)):
+            # [ ] Test
+            print(f"ERROR: Channel is a {type(channel).__name__}.")
+            return
+        transfer_message_id: int = transfer["message_id"]
+        transfer_message: Message = (
+            await channel.fetch_message(transfer_message_id))
+        if not isinstance(transfer_message, Message):
+            print(f"ERROR: Could not get message with ID {transfer_message_id}")
+            continue
+        purpose: str = transfer["purpose"]
+        request_timestamp: float = transfer["request_timestamp"]
+        log_timestamp: float = time()
+        time_elapsed: float = log_timestamp - request_timestamp
+        time_elapsed_friendly: str = format_timespan(time_elapsed)
+        transfer_message_link: str = transfer_message.jump_url
+        message_content = (f"Sender: {sender_mention}\n"
+                           f"Receiver: {receiver_mention}\n"
+                           f"Amount: {amount} {coins}\n"
+                           f"When: {time_elapsed_friendly} ago\n"
+                           f"Purpose: \"{purpose}\"\n"
+                           f"{transfer_message_link}")
+        if not has_sent_message:
+            # Use interaction.response.send_message
+            aml_view = AmlView(
+                interaction=interaction,
+                initial_message=message_content)
+            await interaction.response.send_message(
+                content=message_content,
+                view=aml_view,
+                allowed_mentions=AllowedMentions.none())
+            has_sent_message = True
+        else:
+            # Requires interaction.followup.send
+            aml_view = AmlView(
+                interaction=interaction,
+                initial_message=message_content)
+            followup_message: Message | None = await interaction.followup.send(
+                content=message_content,
+                view=aml_view,
+                allowed_mentions=AllowedMentions.none())
+            aml_view.followup_message = followup_message
+        wait: bool = await aml_view.wait()
+        timed_out: bool = True if wait else False
+        if timed_out:
+            return
+        transaction_approved: bool = aml_view.approved
+        request_timestamp_friendly: str = (
+            log.format_timestamp(request_timestamp))
+        log_timestamp = time()
+        action: str
+        if transaction_approved:
+            action = "approved"
+        else:
+            action = "declined"
+        log_message: str = (f"AML officer {invoker_name} ({invoker_id}) "
+                            f"{action} {sender} ({sender_id})'s transfer "
+                            f"of {amount} {coins} "
+                            f"to {receiver} ({receiver_id}) "
+                            f"dated {request_timestamp_friendly}.")
+        log.log(log_message, log_timestamp)
+        del log_message
+        if transaction_approved: 
+            await transfer_coins(
+                sender=sender, receiver=receiver, amount=amount,
+                method="transfer_aml", channel_id=channel_id)
+        else:
+            # TODO Let AML officer provide a reason for declining the transaction
+            coin_label: str = format_coin_label(amount)
+            message_content = (
+                f"{sender_mention} Your transfer of {amount} {coin_label} "
+                f"to {receiver_mention} has been declined by an AML officer.\n"
+                f"{transfer_message_link}")
+            await channel.send(message_content)
+            del message_content
+        transfers_waiting_approval.remove(transfer)
+    message_content = "All transactions have been processed."
+    if not has_sent_message:
+        await interaction.response.send_message(message_content)
+    else:
+        await interaction.followup.send(message_content)
+    del message_content
+# endregion
 
+# region Main
 # TODO Track reaction removals
 # TODO Leaderboard
 # TODO Add casino jobs
 # TODO Add more games
 
-# region Main
 if DISCORD_TOKEN:
     bot.run(DISCORD_TOKEN)
 else:
