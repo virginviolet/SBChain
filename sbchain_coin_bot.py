@@ -4752,9 +4752,18 @@ async def aml(interaction: Interaction) -> None:
     invoker_name: str = invoker.name
     invoker_id: int = invoker.id
     invoker_roles: List[Role] = cast(Member, invoker).roles
-    aml_officer_role: Role | None = utils.get(invoker_roles, name="AML Officer")
+    role_names: List[str] = [
+        "Anti-Money Laundering Officer",
+        "Anti-money laundering officer",
+        "anti_money_laundering_officer",
+        "AML Officer", "AML officer" "aml_officer"]
+    aml_officer_role: Role | None = None
+    for role_name in role_names:
+        aml_officer_role = utils.get(invoker_roles, name=role_name)
+        if aml_officer_role is not None:
+            break
     if aml_officer_role is None:
-        message_content: str = "Only AML officers can approve large transactions."
+        message_content: str = "You are not an AML officer."
         await interaction.response.send_message(message_content)
         del message_content
         return
