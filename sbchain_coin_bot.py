@@ -429,7 +429,7 @@ class BotConfiguration:
             "Blockchain_name": "Blockchain",
             "grifter_swap_id": 0,
             "sbcoin_id": 0,
-            "auto_approve_transfer_limit": 20,
+            "auto_approve_transfer_limit": 0,
             "aml_office_thread_id": 0
         }
         attributes_set = False
