@@ -2052,6 +2052,140 @@ class StartingBonusView(View):
         del message
 # endregion
 
+# region Grifter Suppliers
+
+
+class GrifterSuppliers:
+    """
+    Handels which users are grifter suppliers.
+    """
+
+    def __init__(self) -> None:
+        self.file_name: str = "data/grifter_suppliers.json"
+        # IMPROVE Use hash set instead of list
+        self.suppliers: List[int] = self.load()
+
+    def load(self) -> List[int]:
+        """
+        Loads the grifter suppliers from the JSON file.
+        """
+        # Create missing directories
+        directories: str = self.file_name[:self.file_name.rfind("/")]
+        makedirs(directories, exist_ok=True)
+        if not exists(self.file_name):
+            print("Grifter suppliers file not found.")
+            return []
+
+        # Load the data from the file
+        with open(self.file_name, "r") as file:
+            suppliers_json: Dict[str, List[int]] = json.load(file)
+            suppliers: List[int] = suppliers_json.get("suppliers", [])
+            if len(suppliers) == 0:
+                print("No grifter suppliers found.")
+        return suppliers
+
+    async def add(self, user: User | Member) -> None:
+        """
+        Add user IDs to the list of grifter suppliers.
+        """
+        user_name: str = user.name
+        user_id: int = user.id
+        del user
+        if user_id not in self.suppliers:
+            self.suppliers.append(user_id)
+            print(f"User {user_name} ({user_id}) added "
+                  "to the grifter suppliers registry.")
+        else:
+            print(f"User {user_name} ({user_id}) is already in the"
+                  "grifter suppliers registry.")
+        with open(self.file_name, "w") as file:
+            json.dump({"suppliers": self.suppliers}, file)
+
+    async def replace(self, user_ids: List[int]) -> None:
+        """
+        Replace the list of grifter suppliers with a new list.
+        """
+        print("Replacing grifter suppliers registry...")
+        for user_id in user_ids:
+            user: User = await bot.fetch_user(user_id)
+            user_name: str = user.name
+            print(f"User {user_name} ({user_id}) will be added to the "
+                  "grifter suppliers registry.")
+        self.suppliers = user_ids
+        with open(self.file_name, "w") as file:
+            json.dump({"suppliers": self.suppliers}, file)
+        print("Grifter suppliers registry replaced.")
+
+    def remove(self, user: User | Member) -> None:
+        """
+        Remove user ID from the list of grifter suppliers.
+        """
+        user_id: int = user.id
+        user_name: str = user.name
+        if user_id in self.suppliers:
+            self.suppliers.remove(user_id)
+            print(f"User {user_name} ({user_id}) removed from the "
+                  "grifter suppliers registry.")
+        else:
+            print(f"User {user_name} ({user_id}) is not in the "
+                  "grifter suppliers registry.")
+        with open(self.file_name, "w") as file:
+            json.dump({"suppliers": self.suppliers}, file)
+# endregion
+
+# region TransfersWaitingApproval
+
+
+class TransfersWaitingApproval:
+    """
+    Handles transfers waiting for approval.
+    """
+
+    def __init__(self) -> None:
+        self.file_name: str = "data/transfers_waiting_approval.json"
+        self.transfers: List[TransactionRequest] = self.load()
+
+    def load(self) -> List[TransactionRequest]:
+        """
+        Loads the transfer requests from the JSON file.
+        """
+        # Create missing directories
+        directories: str = self.file_name[:self.file_name.rfind("/")]
+        makedirs(directories, exist_ok=True)
+        if not exists(self.file_name):
+            print("Transfers waiting approval file not found.")
+            return []
+
+        # Load the data from the file
+        with open(self.file_name, "r") as file:
+            transfers_json: Dict[str, List[TransactionRequest]] = (
+                json.load(file))
+            transfers: List[TransactionRequest] = (
+                transfers_json.get("transfers", []))
+            if len(transfers) == 0:
+                print("No transfers waiting approval found.")
+        return transfers
+
+    def add(self, transfer: TransactionRequest) -> None:
+        """
+        Add a transfer to the list of transfers waiting for approval.
+        """
+        self.transfers.append(transfer)
+        with open(self.file_name, "w") as file:
+            json.dump({"transfers": self.transfers}, file)
+
+    def remove(self, transfer: TransactionRequest) -> None:
+        """
+        Remove a transfer from the list of transfers waiting for approval.
+        """
+        if transfer in self.transfers:
+            self.transfers.remove(transfer)
+            with open(self.file_name, "w") as file:
+                json.dump({"transfers": self.transfers}, file)
+            # print("Transfer removed from the approval list.")
+
+# endregion
+
 # region Slots buttons
 
 
@@ -2276,6 +2410,8 @@ class SlotMachineView(View):
 # endregion
 
 # region AML view
+
+
 class AmlView(View):
     def __init__(self,
                  interaction: Interaction,
@@ -2375,138 +2511,6 @@ class AmlView(View):
                 message_id=message_id,
                 content=message_content, view=self)
         del message_content
-# endregion
-
-# region Grifter Suppliers
-
-
-class GrifterSuppliers:
-    """
-    Handels which users are grifter suppliers.
-    """
-
-    def __init__(self) -> None:
-        self.file_name: str = "data/grifter_suppliers.json"
-        # IMPROVE Use hash set instead of list
-        self.suppliers: List[int] = self.load()
-
-    def load(self) -> List[int]:
-        """
-        Loads the grifter suppliers from the JSON file.
-        """
-        # Create missing directories
-        directories: str = self.file_name[:self.file_name.rfind("/")]
-        makedirs(directories, exist_ok=True)
-        if not exists(self.file_name):
-            print("Grifter suppliers file not found.")
-            return []
-
-        # Load the data from the file
-        with open(self.file_name, "r") as file:
-            suppliers_json: Dict[str, List[int]] = json.load(file)
-            suppliers: List[int] = suppliers_json.get("suppliers", [])
-            if len(suppliers) == 0:
-                print("No grifter suppliers found.")
-        return suppliers
-
-    async def add(self, user: User | Member) -> None:
-        """
-        Add user IDs to the list of grifter suppliers.
-        """
-        user_name: str = user.name
-        user_id: int = user.id
-        del user
-        if user_id not in self.suppliers:
-            self.suppliers.append(user_id)
-            print(f"User {user_name} ({user_id}) added "
-                    "to the grifter suppliers registry.")
-        else:
-            print(f"User {user_name} ({user_id}) is already in the"
-                    "grifter suppliers registry.")
-        with open(self.file_name, "w") as file:
-            json.dump({"suppliers": self.suppliers}, file)
-
-    async def replace(self, user_ids: List[int]) -> None:
-        """
-        Replace the list of grifter suppliers with a new list.
-        """
-        print("Replacing grifter suppliers registry...")
-        for user_id in user_ids:
-            user: User = await bot.fetch_user(user_id)
-            user_name: str = user.name
-            print(f"User {user_name} ({user_id}) will be added to the "
-                  "grifter suppliers registry.")
-        self.suppliers = user_ids
-        with open(self.file_name, "w") as file:
-            json.dump({"suppliers": self.suppliers}, file)
-        print("Grifter suppliers registry replaced.")
-
-    def remove(self, user: User | Member) -> None:
-        """
-        Remove user ID from the list of grifter suppliers.
-        """
-        user_id: int = user.id
-        user_name: str = user.name
-        if user_id in self.suppliers:
-            self.suppliers.remove(user_id)
-            print(f"User {user_name} ({user_id}) removed from the "
-                  "grifter suppliers registry.")
-        else:
-            print(f"User {user_name} ({user_id}) is not in the "
-                  "grifter suppliers registry.")
-        with open(self.file_name, "w") as file:
-            json.dump({"suppliers": self.suppliers}, file)
-# endregion
-
-# region TransfersWaitingApproval
-class TransfersWaitingApproval:
-    """
-    Handles transfers waiting for approval.
-    """
-
-    def __init__(self) -> None:
-        self.file_name: str = "data/transfers_waiting_approval.json"
-        self.transfers: List[TransactionRequest] = self.load()
-    
-    def load(self) -> List[TransactionRequest]:
-        """
-        Loads the transfer requests from the JSON file.
-        """
-        # Create missing directories
-        directories: str = self.file_name[:self.file_name.rfind("/")]
-        makedirs(directories, exist_ok=True)
-        if not exists(self.file_name):
-            print("Transfers waiting approval file not found.")
-            return []
-
-        # Load the data from the file
-        with open(self.file_name, "r") as file:
-            transfers_json: Dict[str, List[TransactionRequest]] = (
-                json.load(file))
-            transfers: List[TransactionRequest] = (
-                transfers_json.get("transfers", []))
-            if len(transfers) == 0:
-                print("No transfers waiting approval found.")
-        return transfers
-    
-    def add(self, transfer: TransactionRequest) -> None:
-        """
-        Add a transfer to the list of transfers waiting for approval.
-        """
-        self.transfers.append(transfer)
-        with open(self.file_name, "w") as file:
-            json.dump({"transfers": self.transfers}, file)
-    
-    def remove(self, transfer: TransactionRequest) -> None:
-        """
-        Remove a transfer from the list of transfers waiting for approval.
-        """
-        if transfer in self.transfers:
-            self.transfers.remove(transfer)
-            with open(self.file_name, "w") as file:
-                json.dump({"transfers": self.transfers}, file)
-            # print("Transfer removed from the approval list.")
-
 # endregion
 
 # region Flask funcs
@@ -2631,6 +2635,7 @@ def reinitialize_grifter_suppliers() -> None:
     """
     global grifter_suppliers
     grifter_suppliers = GrifterSuppliers()
+
 
 def reinitialize_transfers_waiting_approval() -> None:
     """
@@ -3024,6 +3029,8 @@ async def add_block_transaction(
 # endregion
 
 # region Transfer
+
+
 async def transfer_coins(sender: Member | User,
                          receiver: Member | User,
                          amount: int,
@@ -3040,9 +3047,9 @@ async def transfer_coins(sender: Member | User,
         channel = interaction.channel
     else:
         channel: (VoiceChannel | StageChannel | ForumChannel | TextChannel |
-            CategoryChannel | Thread | PrivateChannel | None) = (
+                  CategoryChannel | Thread | PrivateChannel | None) = (
             bot.get_channel(channel_id))
-        
+
     async def send_message(message_text: str,
                            ephemeral: bool = False,
                            allowed_mentions: AllowedMentions = MISSING) -> None:
@@ -3051,7 +3058,7 @@ async def transfer_coins(sender: Member | User,
                 print("ERROR: Channel is None.")
                 return
             elif isinstance(channel,
-                    (PrivateChannel, ForumChannel, CategoryChannel)):
+                            (PrivateChannel, ForumChannel, CategoryChannel)):
                 # [ ] Test
                 print(f"ERROR: Channel is a {type(channel).__name__}.")
                 return
@@ -3090,7 +3097,7 @@ async def transfer_coins(sender: Member | User,
         await send_message(message_content, ephemeral=True)
         del message_content
         return
-    
+
     try:
         balance = blockchain.get_balance(user_unhashed=sender_id)
     except Exception as e:
@@ -3118,7 +3125,7 @@ async def transfer_coins(sender: Member | User,
             configuration.auto_approve_transfer_limit)
         if amount > auto_approve_transfer_limit:
             print(f"Transfer amount exceeds auto-approval limit of "
-                f"{auto_approve_transfer_limit}.")
+                  f"{auto_approve_transfer_limit}.")
             receiver_mention: str = receiver.mention
             if purpose is None:
                 message_content: str = (
@@ -3128,6 +3135,7 @@ async def transfer_coins(sender: Member | User,
                     f"{amount} {coin_label_a} to {receiver_mention}.")
                 await interaction.response.send_message(message_content)
                 del message_content
+
                 def check(message: Message) -> bool:
                     message_author: User | Member = message.author
                     return message_author == sender
@@ -3203,7 +3211,7 @@ async def transfer_coins(sender: Member | User,
             log.log(log_message, request_timestamp)
             del log_message
             return
-    
+
     await add_block_transaction(
         blockchain=blockchain,
         sender=sender,
@@ -3930,7 +3938,7 @@ async def slots(interaction: Interaction,
             return True
         else:
             return False
-        
+
     if private_room:
         should_use_ephemeral = True
     else:
@@ -4732,6 +4740,8 @@ async def about_coin(interaction: Interaction) -> None:
 # endregion
 
 # region /aml
+
+
 @bot.tree.command(name="aml",
                   description="Anti-money laundering workstation")
 async def aml(interaction: Interaction) -> None:
@@ -4768,13 +4778,13 @@ async def aml(interaction: Interaction) -> None:
         amount: int = transfer["amount"]
         channel_id: int = transfer["channel_id"]
         channel: (VoiceChannel | StageChannel | ForumChannel | TextChannel |
-        CategoryChannel | Thread | PrivateChannel
-        | None) = bot.get_channel(channel_id)
+                  CategoryChannel | Thread | PrivateChannel
+                  | None) = bot.get_channel(channel_id)
         if channel is None:
             print("ERROR: Channel is None.")
             return
         elif isinstance(channel,
-                (PrivateChannel, ForumChannel, CategoryChannel)):
+                        (PrivateChannel, ForumChannel, CategoryChannel)):
             # [ ] Test
             print(f"ERROR: Channel is a {type(channel).__name__}.")
             return
@@ -4782,7 +4792,8 @@ async def aml(interaction: Interaction) -> None:
         transfer_message: Message = (
             await channel.fetch_message(transfer_message_id))
         if not isinstance(transfer_message, Message):
-            print(f"ERROR: Could not get message with ID {transfer_message_id}")
+            print(f"ERROR: Could not get message "
+                  f"with ID {transfer_message_id}")
             continue
         purpose: str = transfer["purpose"]
         request_timestamp: float = transfer["request_timestamp"]
@@ -4836,7 +4847,7 @@ async def aml(interaction: Interaction) -> None:
                             f"dated {request_timestamp_friendly}.")
         log.log(log_message, log_timestamp)
         del log_message
-        if transaction_approved: 
+        if transaction_approved:
             await transfer_coins(
                 sender=sender, receiver=receiver, amount=amount,
                 method="transfer_aml", channel_id=channel_id)
