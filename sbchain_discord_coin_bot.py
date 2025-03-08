@@ -3388,6 +3388,25 @@ def get_aml_officer_role(interaction: Interaction):
         if aml_officer is not None:
             break
     return aml_officer
+
+def test_invoker_is_aml_officer(interaction: Interaction) -> bool:
+    invoker: User | Member = interaction.user
+    invoker_roles: List[Role] = cast(Member, invoker).roles
+    role_names: List[str] = [
+        "Anti-Money Laundering Officer",
+        "Anti-money laundering officer",
+        "anti_money_laundering_officer",
+        "AML Officer", "AML officer" "aml_officer"]
+    aml_officer_role: Role | None = None
+    for role_name in role_names:
+        aml_officer_role = utils.get(invoker_roles, name=role_name)
+        if aml_officer_role is not None:
+            break
+    del invoker, invoker_roles
+    if aml_officer_role is None:
+        return False
+    else:
+        return True
 # endregion
 
 # region Terminate bot
@@ -3555,6 +3574,8 @@ invoke_bot_configuration()
 
 slot_machine = SlotMachine()
 grifter_suppliers = GrifterSuppliers()
+aml_group = app_commands.Group(name="aml",
+                               description="Anti-money laundering workstation")
 transfers_waiting_approval = TransfersWaitingApproval()
 decrypted_transactions_spreadsheet = (
     DecryptedTransactionsSpreadsheet(time_zone=time_zone))
@@ -3582,6 +3603,8 @@ async def on_ready() -> None:
         start_checkpoints(limit=channel_checkpoint_limit))
 
     await process_missed_messages(limit=50)
+
+    bot.tree.add_command(aml_group)
 
     # global guild_ids
     # guild_ids = load_guild_ids()
@@ -5058,106 +5081,23 @@ async def about_coin(interaction: Interaction) -> None:
 # endregion
 
 # region /aml
-
-
-@bot.tree.command(name="aml",
-                  description="Anti-money laundering workstation")
-@app_commands.describe(block_user_from_receivals=(f"Block user from "
-                                                  f"receiving {coins}"))
-@app_commands.describe(unblock_user_from_receivals=(f"Unblock user from "
-                                                    f"receiving {coins}"))
-@app_commands.describe(reason_for_block="Reason for blocking user from "
-                       f"receiving {coins}.")
-@app_commands.describe(decrypt_spreadsheet="Decrypt the "
-                       "transaction spreadsheet")
-async def aml(interaction: Interaction,
-              block_user_from_receivals: User | Member | None = None,
-              unblock_user_from_receivals: User | Member | None = None,
-              reason_for_block: str | None = None,
-              decrypt_spreadsheet: bool | None = None) -> None:
+@aml_group.command(name="approve",
+                   description="Approve transactions that require "
+                   "manual approval")
+async def approve(interaction: Interaction) -> None:
     """
-    Command to approve large transactions.
+    Command to approve or decline large transactions.
     """
-    # TODO Add parameter to check reason for block
-    invoker: User | Member = interaction.user
-    invoker_name: str = invoker.name
-    invoker_id: int = invoker.id
-    invoker_roles: List[Role] = cast(Member, invoker).roles
-    role_names: List[str] = [
-        "Anti-Money Laundering Officer",
-        "Anti-money laundering officer",
-        "anti_money_laundering_officer",
-        "AML Officer", "AML officer" "aml_officer"]
-    aml_officer_role: Role | None = None
-    for role_name in role_names:
-        aml_officer_role = utils.get(invoker_roles, name=role_name)
-        if aml_officer_role is not None:
-            break
-    if aml_officer_role is None:
+    invoker_has_aml_role: bool = test_invoker_is_aml_officer(interaction)
+    if not invoker_has_aml_role:
         message_content: str = "You are not an AML officer."
         await interaction.response.send_message(message_content)
         del message_content
         return
-
-    if block_user_from_receivals and not reason_for_block:
-        message_content: str = ("You must provide a reason for blocking "
-                                "a user from receiving coins.")
-        await interaction.response.send_message(message_content)
-        return
-    elif block_user_from_receivals and unblock_user_from_receivals:
-        message_content: str = ("You cannot block and unblock a user "
-                                "from receiving coins at the same time.")
-        await interaction.response.send_message(message_content)
-        return
-    elif block_user_from_receivals or unblock_user_from_receivals:
-        user_to_affect: User | Member
-        action = "blocked" if block_user_from_receivals else "unblocked"
-        blocked_value: bool
-        if block_user_from_receivals:
-            user_to_affect = block_user_from_receivals
-            blocked_value = True
-        elif unblock_user_from_receivals:
-            blocked_value = False
-            user_to_affect = unblock_user_from_receivals
-        else:
-            # For the static type checker
-            return
-        user_id: int = user_to_affect.id
-        user_name: str = user_to_affect.name
-        user_save_data = UserSaveData(user_id=user_id, user_name=user_name)
-        user_save_data.blocked_from_receiving_coins = blocked_value
-        if block_user_from_receivals:
-            user_save_data.blocked_from_receiving_coins_reason = (
-                str(reason_for_block))
-        else:
-            user_save_data.blocked_from_receiving_coins_reason = None
-        user_mention: str = user_to_affect.mention
-        message_content = (
-            f"User {user_mention} has been {action} from receiving {coins}.")
-        del action
-        await interaction.response.send_message(
-            message_content, allowed_mentions=AllowedMentions.none())
-        del message_content
-        return
-    elif decrypt_spreadsheet:
-        if decrypted_transactions_spreadsheet is None:
-            message_content: str = (
-                "Could not make a decrypted transactions spreadsheet.")
-            await interaction.response.send_message(
-                message_content, ephemeral=True)
-            del message_content
-            raise ValueError("decrypted_transactions_spreadsheet is None.")
-        decrypted_transactions_spreadsheet.decrypt()
-        spreadsheet_path: Path = (decrypted_transactions_spreadsheet.decrypted_spreadsheet_path)
-        with open(spreadsheet_path, 'rb') as f:
-            decrypted_transactions_spreadsheet_file = File(f)
-            message_content: str = (
-                "The transactions spreadsheet has been decrypted.")
-            await interaction.response.send_message(message_content,
-                file=decrypted_transactions_spreadsheet_file)
-        del message_content
-        return
-
+    
+    invoker: User | Member = interaction.user
+    invoker_name: str = invoker.name
+    invoker_id: int = invoker.id
     transfers_list: List[TransactionRequest] = transfers_waiting_approval.load()
     has_sent_message = False
     for transfer in transfers_list:
@@ -5268,6 +5208,85 @@ async def aml(interaction: Interaction,
     else:
         await interaction.followup.send(message_content)
     del message_content
+
+
+@aml_group.command(name="block_receivals",
+                   description=f"Block a user from receiving {coins}")
+@app_commands.describe(user=(f"User to block from receiving {coins}"))
+@app_commands.describe(blocked=(f"Set whether the user should be blocked "
+                                 f"from receiving {coins}"))
+@app_commands.describe(reason="Reason for blocking user from "
+                       f"receiving {coins}")
+async def block_receivals(interaction: Interaction,
+              user: User | Member,
+              blocked: bool | None = None,
+              reason: str | None = None) -> None:
+    """
+    Command to approve large transactions.
+    """
+    # TODO Add parameter to check reason for block
+    if blocked and not reason:
+        message_content: str = ("You must provide a reason for blocking "
+                                "the user from receiving coins.")
+        await interaction.response.send_message(message_content, ephemeral=True)
+        del message_content
+        return
+    
+    invoker_has_aml_role: bool = test_invoker_is_aml_officer(interaction)
+    if not invoker_has_aml_role:
+        message_content: str = "You are not an AML officer."
+        await interaction.response.send_message(message_content)
+        del message_content
+        return
+    
+    user_id: int = user.id
+    user_name: str = user.name
+    user_mention: str = user.mention
+    user_save_data = UserSaveData(user_id=user_id, user_name=user_name)
+    message_content: str
+    if blocked is None:
+        is_blocked: bool = user_save_data.blocked_from_receiving_coins
+        blocked_or_not_blocked: (
+            Literal['blocked'] | Literal['not blocked']) = (
+            "blocked" if is_blocked else "not blocked")
+        message_content = (f"User {user_mention} is currently "
+                           f"{blocked_or_not_blocked} from receiving {coins}.")
+    else:
+        blocked_or_unblocked: Literal['blocked'] | Literal['unblocked'] = (
+            "blocked" if blocked else "unblocked")
+        user_save_data.blocked_from_receiving_coins = blocked
+        if blocked:
+            user_save_data.blocked_from_receiving_coins_reason = reason
+        else:
+            user_save_data.blocked_from_receiving_coins_reason = None
+        message_content = (f"User {user_mention} has been "
+                        f"{blocked_or_unblocked} from receiving {coins}.")
+    await interaction.response.send_message(
+        message_content, allowed_mentions=AllowedMentions.none())
+    del message_content
+    return
+    
+@aml_group.command(name="decrypt_spreadsheet",
+                   description=f"Block a user from receiving {coins}")
+@app_commands.describe(user="Filter transactions by user")
+async def decrypt_spreadsheet(interaction: Interaction) -> None:
+    if decrypted_transactions_spreadsheet is None:
+        message_content: str = (
+            "Could not make a decrypted transactions spreadsheet.")
+        await interaction.response.send_message(
+            message_content, ephemeral=True)
+        del message_content
+        raise ValueError("decrypted_transactions_spreadsheet is None.")
+    decrypted_transactions_spreadsheet.decrypt()
+    spreadsheet_path: Path = (decrypted_transactions_spreadsheet.decrypted_spreadsheet_path)
+    with open(spreadsheet_path, 'rb') as f:
+        decrypted_transactions_spreadsheet_file = File(f)
+        message_content: str = (
+            "The transactions spreadsheet has been decrypted.")
+        await interaction.response.send_message(message_content,
+            file=decrypted_transactions_spreadsheet_file)
+    del message_content
+    return
 # endregion
 
 # region Main
