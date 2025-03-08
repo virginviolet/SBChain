@@ -1953,7 +1953,7 @@ class DecryptedTransactionsSpreadsheet:
             save_data_dir_full_path.relative_to(project_root))
         self.time_zone: str | None = time_zone
 
-    def decrypt(self) -> None:
+    def decrypt(self, user_id: int | None = None) -> None:
         """
         Decrypts the transactions spreadsheet.
         """
@@ -1968,11 +1968,11 @@ class DecryptedTransactionsSpreadsheet:
         user_names: Dict[str, str] = {}
         for subdir, _, _ in os.walk(self.save_data_dir_path):
             try:
-                user_id: int = int(basename(subdir))
-                save_data = UserSaveData(user_id)
-                user_name: str = save_data.user_name
-                user_id_hashed: str = sha256(str(user_id).encode()).hexdigest()
-                user_names[user_id_hashed] = user_name
+                subdir_user_id: int = int(basename(subdir))
+                subdir_save_data = UserSaveData(subdir_user_id)
+                subdir_user_name: str = subdir_save_data.user_name
+                subdir_user_id_hashed: str = sha256(str(user_id).encode()).hexdigest()
+                user_names[subdir_user_id_hashed] = subdir_user_name
             except Exception as e:
                 print(f"ERROR: Error getting save data: {e}")
                 continue
@@ -1980,15 +1980,23 @@ class DecryptedTransactionsSpreadsheet:
         # Load the data from the file
         transactions: pd.DataFrame = pd.read_csv(  # type: ignore
             self.encrypted_spreadsheet_path, sep="\t")
+            
+        if user_id:
+            # Only keep transactions that involve the specified user
+            user_id_hashed: str = sha256(str(user_id).encode()).hexdigest()
+            transactions = transactions[
+                (transactions["Sender"] != user_id_hashed) |
+                (transactions["Receiver"] != user_id_hashed)]
+            
         # Replace hashed user IDs with user names
         transactions["Sender"] = (
             transactions["Sender"].map(user_names))  # type: ignore
         transactions["Receiver"] = (
             transactions["Receiver"].map(user_names))  # type: ignore
         # Replace unix timestamps
-        # use format_timestamp()
         transactions["Time"] = (
             transactions["Time"].map(format_timestamp))  # type: ignore
+
         # Save the decrypted transactions to a new file
         transactions.to_csv(
             self.decrypted_spreadsheet_path, sep="\t", index=False)
@@ -3559,7 +3567,9 @@ if __name__ == "__main__":
 
     print(f"Initializing blockchain...")
     try:
-        blockchain = sbchain.Blockchain()
+        blockchain_path = "data/blockchain.json"
+        transactions_path = "data/transactions.tsv"
+        blockchain = sbchain.Blockchain(blockchain_path, transactions_path)
         print(f"Blockchain initialized.")
     except Exception as e:
         print(f"ERROR: Error initializing blockchain: {e}")
@@ -3574,8 +3584,7 @@ invoke_bot_configuration()
 
 slot_machine = SlotMachine()
 grifter_suppliers = GrifterSuppliers()
-aml_group = app_commands.Group(name="aml",
-                               description="Anti-money laundering workstation")
+aml_group = app_commands.Group(name="aml", description="Anti-money laundering workstation")
 transfers_waiting_approval = TransfersWaitingApproval()
 decrypted_transactions_spreadsheet = (
     DecryptedTransactionsSpreadsheet(time_zone=time_zone))
@@ -5269,7 +5278,7 @@ async def block_receivals(interaction: Interaction,
 @aml_group.command(name="decrypt_spreadsheet",
                    description=f"Block a user from receiving {coins}")
 @app_commands.describe(user="Filter transactions by user")
-async def decrypt_spreadsheet(interaction: Interaction) -> None:
+async def decrypt_spreadsheet(interaction: Interaction, user: User | Member | None = None) -> None:
     if decrypted_transactions_spreadsheet is None:
         message_content: str = (
             "Could not make a decrypted transactions spreadsheet.")
@@ -5277,7 +5286,10 @@ async def decrypt_spreadsheet(interaction: Interaction) -> None:
             message_content, ephemeral=True)
         del message_content
         raise ValueError("decrypted_transactions_spreadsheet is None.")
-    decrypted_transactions_spreadsheet.decrypt()
+    user_id: int | None = None
+    if user:
+        user_id = user.id
+    decrypted_transactions_spreadsheet.decrypt(user_id)
     spreadsheet_path: Path = (decrypted_transactions_spreadsheet.decrypted_spreadsheet_path)
     with open(spreadsheet_path, 'rb') as f:
         decrypted_transactions_spreadsheet_file = File(f)
