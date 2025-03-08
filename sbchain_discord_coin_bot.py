@@ -1953,7 +1953,9 @@ class DecryptedTransactionsSpreadsheet:
             save_data_dir_full_path.relative_to(project_root))
         self.time_zone: str | None = time_zone
 
-    def decrypt(self, user_id: int | None = None) -> None:
+    def decrypt(self,
+                user_id: int | None = None,
+                user_name: str | None = None) -> None:
         """
         Decrypts the transactions spreadsheet.
         """
@@ -1971,7 +1973,8 @@ class DecryptedTransactionsSpreadsheet:
                 subdir_user_id: int = int(basename(subdir))
                 subdir_save_data = UserSaveData(subdir_user_id)
                 subdir_user_name: str = subdir_save_data.user_name
-                subdir_user_id_hashed: str = sha256(str(user_id).encode()).hexdigest()
+                subdir_user_id_hashed: str = (
+                    sha256(str(subdir_user_id).encode()).hexdigest())
                 user_names[subdir_user_id_hashed] = subdir_user_name
             except Exception as e:
                 print(f"ERROR: Error getting save data: {e}")
@@ -5277,8 +5280,11 @@ async def block_receivals(interaction: Interaction,
     
 @aml_group.command(name="decrypt_spreadsheet",
                    description=f"Block a user from receiving {coins}")
-@app_commands.describe(user="Filter transactions by user")
-async def decrypt_spreadsheet(interaction: Interaction, user: User | Member | None = None) -> None:
+@app_commands.describe(user="Filter transactions by user",
+                       user_name="Filter transactions by user name")
+async def decrypt_spreadsheet(interaction: Interaction,
+                              user: User | Member | None = None,
+                              user_name: str | None = None) -> None:
     if decrypted_transactions_spreadsheet is None:
         message_content: str = (
             "Could not make a decrypted transactions spreadsheet.")
@@ -5286,10 +5292,19 @@ async def decrypt_spreadsheet(interaction: Interaction, user: User | Member | No
             message_content, ephemeral=True)
         del message_content
         raise ValueError("decrypted_transactions_spreadsheet is None.")
+    if user and user_name:
+        user_user_name: str = user.name
+        if user_name != user_user_name:
+            message_content: str = ("Using both the `user` and the `user_name` "
+                                    "parameter is not supported.")
+            await interaction.response.send_message(
+                message_content, ephemeral=True)
+            del message_content
+            return
     user_id: int | None = None
     if user:
         user_id = user.id
-    decrypted_transactions_spreadsheet.decrypt(user_id)
+    decrypted_transactions_spreadsheet.decrypt(user_id, user_name)
     spreadsheet_path: Path = (decrypted_transactions_spreadsheet.decrypted_spreadsheet_path)
     with open(spreadsheet_path, 'rb') as f:
         decrypted_transactions_spreadsheet_file = File(f)
