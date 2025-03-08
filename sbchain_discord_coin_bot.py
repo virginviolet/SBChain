@@ -1983,13 +1983,17 @@ class DecryptedTransactionsSpreadsheet:
         # Load the data from the file
         transactions: pd.DataFrame = pd.read_csv(  # type: ignore
             self.encrypted_spreadsheet_path, sep="\t")
+        
+        # IMPROVE if user_id and user_name
+        # Only keep transactions that involve the specified user as
+        # identified by the ID or name
             
         if user_id:
             # Only keep transactions that involve the specified user
             user_id_hashed: str = sha256(str(user_id).encode()).hexdigest()
             transactions = transactions[
-                (transactions["Sender"] != user_id_hashed) |
-                (transactions["Receiver"] != user_id_hashed)]
+                (transactions["Sender"] == user_id_hashed) |
+                (transactions["Receiver"] == user_id_hashed)]
             
         # Replace hashed user IDs with user names
         transactions["Sender"] = (
@@ -1999,10 +2003,17 @@ class DecryptedTransactionsSpreadsheet:
         # Replace unix timestamps
         transactions["Time"] = (
             transactions["Time"].map(format_timestamp))  # type: ignore
+        
+        if user_name:
+            # Only keep transactions that involve the specified user
+            transactions = transactions[
+                (transactions["Sender"] == user_name) |
+                (transactions["Receiver"] == user_name)]
 
         # Save the decrypted transactions to a new file
         transactions.to_csv(
             self.decrypted_spreadsheet_path, sep="\t", index=False)
+            
         print("Decrypted transactions spreadsheet saved to file.")
 # endregion
 
