@@ -1983,18 +1983,18 @@ class DecryptedTransactionsSpreadsheet:
         # Load the data from the file
         transactions: pd.DataFrame = pd.read_csv(  # type: ignore
             self.encrypted_spreadsheet_path, sep="\t")
-        
+
         # IMPROVE if user_id and user_name
         # Only keep transactions that involve the specified user as
         # identified by the ID or name
-            
+
         if user_id:
             # Only keep transactions that involve the specified user
             user_id_hashed: str = sha256(str(user_id).encode()).hexdigest()
             transactions = transactions[
                 (transactions["Sender"] == user_id_hashed) |
                 (transactions["Receiver"] == user_id_hashed)]
-            
+
         # Replace hashed user IDs with user names
         transactions["Sender"] = (
             transactions["Sender"].map(user_names))  # type: ignore
@@ -2003,7 +2003,7 @@ class DecryptedTransactionsSpreadsheet:
         # Replace unix timestamps
         transactions["Time"] = (
             transactions["Time"].map(format_timestamp))  # type: ignore
-        
+
         if user_name:
             # Only keep transactions that involve the specified user
             transactions = transactions[
@@ -2013,7 +2013,7 @@ class DecryptedTransactionsSpreadsheet:
         # Save the decrypted transactions to a new file
         transactions.to_csv(
             self.decrypted_spreadsheet_path, sep="\t", index=False)
-            
+
         print("Decrypted transactions spreadsheet saved to file.")
 # endregion
 
@@ -3411,6 +3411,7 @@ def get_aml_officer_role(interaction: Interaction):
             break
     return aml_officer
 
+
 def test_invoker_is_aml_officer(interaction: Interaction) -> bool:
     invoker: User | Member = interaction.user
     invoker_roles: List[Role] = cast(Member, invoker).roles
@@ -3531,6 +3532,7 @@ def format_timestamp(timestamp: float, time_zone: str | None = None) -> str:
 
 # region Coin label
 
+
 def format_coin_label(number: int) -> str:
     """
     Returns the appropriate label for the given number of coins.
@@ -3598,7 +3600,8 @@ invoke_bot_configuration()
 
 slot_machine = SlotMachine()
 grifter_suppliers = GrifterSuppliers()
-aml_group = app_commands.Group(name="aml", description="Anti-money laundering workstation")
+aml_group = app_commands.Group(name="aml",
+                               description="Anti-money laundering workstation")
 transfers_waiting_approval = TransfersWaitingApproval()
 decrypted_transactions_spreadsheet = (
     DecryptedTransactionsSpreadsheet(time_zone=time_zone))
@@ -4367,17 +4370,19 @@ async def slots(interaction: Interaction,
                 current_time - when_player_added_to_active_players)
             min_wait_time_to_unstuck: int = starting_bonus_timeout * 2 - 3
             print(f"User {user_id} has been in active players for "
-              f"{seconds_since_added} seconds. Minimum wait time to unstuck: "
-              f"{min_wait_time_to_unstuck} seconds.")
+                  f"{seconds_since_added} seconds. Minimum wait time to unstuck: "
+                  f"{min_wait_time_to_unstuck} seconds.")
             if seconds_since_added < min_wait_time_to_unstuck:
                 wait_time: int = (
                     math.ceil(min_wait_time_to_unstuck - seconds_since_added))
-                print(f"Waiting for {wait_time} seconds to unstuck user {user_id}.")
+                print(f"Waiting for {wait_time} seconds "
+                      f"to unstuck user {user_id}.")
                 await asyncio.sleep(wait_time)
             when_player_added_double_check: float | None = (
                 active_slot_machine_players.get(user_id))
             if when_player_added_double_check is not None:
-                when_added_unchanged: bool = (when_player_added_double_check ==
+                when_added_unchanged: bool = (
+                    when_player_added_double_check ==
                     when_player_added_to_active_players)
                 if when_added_unchanged:
                     # If the timestamp has changed, that means that the user
@@ -4389,10 +4394,11 @@ async def slots(interaction: Interaction,
                     user_name: str = user.name
                     active_slot_machine_players.pop(user_id)
                     print(f"User {user_name} ({user_id}) removed from "
-                            "active players.")
+                          "active players.")
                     del user_name
                 else:
-                    print("Timestamp changed. Will not remove user from active players.")
+                    print("Timestamp changed. "
+                          "Will not remove user from active players.")
                     bootup_message = (f"Cheating is illegal.\n"
                                       f"-# Do not use the {Coin} Slot Machine "
                                       "during reboot.")
@@ -5103,7 +5109,9 @@ async def about_coin(interaction: Interaction) -> None:
     del message_content
 # endregion
 
-# region /aml
+# region /aml approve
+
+
 @aml_group.command(name="approve",
                    description="Approve transactions that require "
                    "manual approval")
@@ -5117,7 +5125,7 @@ async def approve(interaction: Interaction) -> None:
         await interaction.response.send_message(message_content)
         del message_content
         return
-    
+
     invoker: User | Member = interaction.user
     invoker_name: str = invoker.name
     invoker_id: int = invoker.id
@@ -5231,19 +5239,22 @@ async def approve(interaction: Interaction) -> None:
     else:
         await interaction.followup.send(message_content)
     del message_content
+# endregion
+
+# region /aml block
 
 
 @aml_group.command(name="block_receivals",
                    description=f"Block a user from receiving {coins}")
 @app_commands.describe(user=(f"User to block from receiving {coins}"))
 @app_commands.describe(blocked=(f"Set whether the user should be blocked "
-                                 f"from receiving {coins}"))
+                                f"from receiving {coins}"))
 @app_commands.describe(reason="Reason for blocking user from "
                        f"receiving {coins}")
 async def block_receivals(interaction: Interaction,
-              user: User | Member,
-              blocked: bool | None = None,
-              reason: str | None = None) -> None:
+                          user: User | Member,
+                          blocked: bool | None = None,
+                          reason: str | None = None) -> None:
     """
     Command to approve large transactions.
     """
@@ -5254,14 +5265,14 @@ async def block_receivals(interaction: Interaction,
         await interaction.response.send_message(message_content, ephemeral=True)
         del message_content
         return
-    
+
     invoker_has_aml_role: bool = test_invoker_is_aml_officer(interaction)
     if not invoker_has_aml_role:
         message_content: str = "You are not an AML officer."
         await interaction.response.send_message(message_content)
         del message_content
         return
-    
+
     user_id: int = user.id
     user_name: str = user.name
     user_mention: str = user.mention
@@ -5283,12 +5294,16 @@ async def block_receivals(interaction: Interaction,
         else:
             user_save_data.blocked_from_receiving_coins_reason = None
         message_content = (f"User {user_mention} has been "
-                        f"{blocked_or_unblocked} from receiving {coins}.")
+                           f"{blocked_or_unblocked} from receiving {coins}.")
     await interaction.response.send_message(
         message_content, allowed_mentions=AllowedMentions.none())
     del message_content
     return
-    
+# endregion
+
+# region /aml decrpyt tx
+
+
 @aml_group.command(name="decrypt_spreadsheet",
                    description=f"Block a user from receiving {coins}")
 @app_commands.describe(user="Filter transactions by user",
@@ -5303,26 +5318,49 @@ async def decrypt_spreadsheet(interaction: Interaction,
             message_content, ephemeral=True)
         del message_content
         raise ValueError("decrypted_transactions_spreadsheet is None.")
-    if user and user_name:
-        user_user_name: str = user.name
-        if user_name != user_user_name:
-            message_content: str = ("Using both the `user` and the `user_name` "
-                                    "parameter is not supported.")
-            await interaction.response.send_message(
-                message_content, ephemeral=True)
-            del message_content
-            return
     user_id: int | None = None
-    if user:
-        user_id = user.id
-    decrypted_transactions_spreadsheet.decrypt(user_id, user_name)
-    spreadsheet_path: Path = (decrypted_transactions_spreadsheet.decrypted_spreadsheet_path)
-    with open(spreadsheet_path, 'rb') as f:
-        decrypted_transactions_spreadsheet_file = File(f)
-        message_content: str = (
+    message_content: str
+    if user or user_name:
+        user_formatted: str
+        if user and user_name:
+            user_user_name: str = user.name
+            if user_name != user_user_name:
+                message_content = (
+                    "Using both the `user` and the `user_name` parameter "
+                    "is not supported.")
+                await interaction.response.send_message(
+                    message_content, ephemeral=True)
+                del message_content
+                return
+
+        if user:
+            user_id = user.id
+            user_formatted = user.mention
+        else:
+            user_name = cast(str, user_name)
+            user_formatted = user_name
+        message_content = ("Here is the decrypted transactions history "
+                           f"for {user_formatted}.")
+    else:
+        message_content = (
             "The transactions spreadsheet has been decrypted.")
-        await interaction.response.send_message(message_content,
-            file=decrypted_transactions_spreadsheet_file)
+    try:
+        decrypted_transactions_spreadsheet.decrypt(user_id, user_name)
+        spreadsheet_path: Path = (
+            decrypted_transactions_spreadsheet.decrypted_spreadsheet_path)
+        with open(spreadsheet_path, 'rb') as f:
+            decrypted_transactions_spreadsheet_file = File(f)
+            await interaction.response.send_message(message_content,
+                                                    file=decrypted_transactions_spreadsheet_file,
+                                                    allowed_mentions=AllowedMentions.none())
+    except Exception as e:
+        error_message: str = ("An error occurred while decrypting the "
+                              f"transactions spreadsheet: {e}")
+        print(f"ERROR: {error_message}")
+        await interaction.response.send_message(
+            error_message, ephemeral=True)
+        del error_message
+        raise e
     del message_content
     return
 # endregion
