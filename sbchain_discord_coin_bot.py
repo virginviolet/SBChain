@@ -2096,7 +2096,25 @@ class StartingBonusView(View):
         Args:
             interaction (Interaction): The interaction object.
         """
-        clicker_id: int = interaction.user.id
+        # Manually call self.on_timeout() if the user has taken too long to click
+        # the button
+        # The view's timeout can be reset by clicking the button with
+        # a second account.
+        # Therefore, we check the time when the invoker was added to
+        # the active players dictionary, and manually call self.on_timeout()
+        # if appropriate, before we move on.
+        current_time: float = time()
+        when_invoker_added_to_active_players: float | None = (
+            active_slot_machine_players.get(self.invoker_id))
+        if when_invoker_added_to_active_players is not None:
+            seconds_since_added: float = (
+                current_time - when_invoker_added_to_active_players)
+            if self.timeout is not None and seconds_since_added >= self.timeout:
+                await self.on_timeout()
+                return
+
+        clicker: User | Member = interaction.user  # The one who clicked
+        clicker_id: int = clicker.id
         if clicker_id != self.invoker_id:
             await interaction.response.send_message(
                 "You cannot roll the die for someone else!", ephemeral=True)
@@ -2144,6 +2162,7 @@ class StartingBonusView(View):
         await self.interaction.edit_original_response(
             content=message_content, view=self)
         del message_content
+        self.stop()  # Probably needed for when we call this function manually
 # endregion
 
 # region Grifter Suppliers
@@ -4368,10 +4387,11 @@ async def slots(interaction: Interaction,
         if when_player_added_to_active_players is not None:
             seconds_since_added: float = (
                 current_time - when_player_added_to_active_players)
+            del current_time
             min_wait_time_to_unstuck: int = starting_bonus_timeout * 2 - 3
             print(f"User {user_id} has been in active players for "
-                  f"{seconds_since_added} seconds. Minimum wait time to unstuck: "
-                  f"{min_wait_time_to_unstuck} seconds.")
+                  f"{seconds_since_added} seconds. Minimum wait time to "
+                  f"unstuck: {min_wait_time_to_unstuck} seconds.")
             if seconds_since_added < min_wait_time_to_unstuck:
                 wait_time: int = (
                     math.ceil(min_wait_time_to_unstuck - seconds_since_added))
