@@ -70,7 +70,7 @@ client = Client(intents=intents)
 load_dotenv()
 DISCORD_TOKEN: str | None = getenv('DISCORD_TOKEN')
 # Number of messages to keep track of in each channel
-channel_checkpoint_limit: int = 3
+per_channel_checkpoint_limit: int = 3
 active_slot_machine_players: Dict[int, float] = {}
 starting_bonus_timeout = 30
 # endregion
@@ -2766,7 +2766,7 @@ def reinitialize_transfers_waiting_approval() -> None:
 # region CP start
 
 
-def start_checkpoints(limit: int = 10) -> Dict[int, ChannelCheckpoints]:
+async def start_checkpoints(limit: int = 10) -> Dict[int, ChannelCheckpoints]:
     """
     Initializes checkpoints for all text channels in all guilds the bot is a
     member of; creates instances of ChannelCheckpoints for each channel.
@@ -3649,8 +3649,7 @@ async def on_ready() -> None:
     print("Bot started.")
 
     all_channel_checkpoints = (
-        start_checkpoints(limit=channel_checkpoint_limit))
-
+        await start_checkpoints(limit=per_channel_checkpoint_limit))
     await process_missed_messages(limit=50)
 
     bot.tree.add_command(aml_group)
@@ -3668,7 +3667,7 @@ async def on_ready() -> None:
         print(f"Synced commands for bot {bot.user}.")
         print(f"Fetching command IDs...")
         about_command: AppCommand | None = None
-        command_name: str = ""
+        command_name: str
         for command in global_commands:
             command_name = command.name
             if command_name == f"about_{coin.lower()}":
