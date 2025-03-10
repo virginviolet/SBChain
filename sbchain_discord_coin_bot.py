@@ -2102,20 +2102,6 @@ class StartingBonusView(View):
             await interaction.response.send_message(
                 "You cannot roll the die for someone else!", ephemeral=True)
         else:
-            # Manually call self.on_timeout() if the user 
-            # has taken too long to click the button
-            # (redundancy to prevent edge case cheating)
-            current_time: float = time()
-            when_invoker_added_to_active_players: float | None = (
-                active_slot_machine_players.get(self.invoker_id))
-            if when_invoker_added_to_active_players is not None:
-                seconds_since_added: float = (
-                    current_time - when_invoker_added_to_active_players)
-                if ((self.timeout is not None) and
-                        (seconds_since_added >= self.timeout)):
-                    await self.on_timeout()
-                return
-
             self.button_clicked = True
             self.die_button.disabled = True
             await interaction.response.edit_message(view=self)
