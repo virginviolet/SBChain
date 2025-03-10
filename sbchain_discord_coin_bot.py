@@ -39,7 +39,7 @@ from discord import (Guild, Intents, Interaction, Member, Message, Client,
                      File)
 from discord.app_commands import AppCommand
 from discord.abc import PrivateChannel
-from discord.ui import View, Button
+from discord.ui import View, Button, Item
 from discord.ext import commands
 from discord.raw_models import RawReactionActionEvent
 from discord.utils import MISSING
@@ -2096,29 +2096,26 @@ class StartingBonusView(View):
         Args:
             interaction (Interaction): The interaction object.
         """
-        # Manually call self.on_timeout() if the user has taken too long to click
-        # the button
-        # The view's timeout can be reset by clicking the button with
-        # a second account.
-        # Therefore, we check the time when the invoker was added to
-        # the active players dictionary, and manually call self.on_timeout()
-        # if appropriate, before we move on.
-        current_time: float = time()
-        when_invoker_added_to_active_players: float | None = (
-            active_slot_machine_players.get(self.invoker_id))
-        if when_invoker_added_to_active_players is not None:
-            seconds_since_added: float = (
-                current_time - when_invoker_added_to_active_players)
-            if self.timeout is not None and seconds_since_added >= self.timeout:
-                await self.on_timeout()
-                return
-
         clicker: User | Member = interaction.user  # The one who clicked
         clicker_id: int = clicker.id
         if clicker_id != self.invoker_id:
             await interaction.response.send_message(
                 "You cannot roll the die for someone else!", ephemeral=True)
         else:
+            # Manually call self.on_timeout() if the user 
+            # has taken too long to click the button
+            # (redundancy to prevent edge case cheating)
+            current_time: float = time()
+            when_invoker_added_to_active_players: float | None = (
+                active_slot_machine_players.get(self.invoker_id))
+            if when_invoker_added_to_active_players is not None:
+                seconds_since_added: float = (
+                    current_time - when_invoker_added_to_active_players)
+                if ((self.timeout is not None) and
+                        (seconds_since_added >= self.timeout)):
+                    await self.on_timeout()
+                return
+
             self.button_clicked = True
             self.die_button.disabled = True
             await interaction.response.edit_message(view=self)
@@ -2162,7 +2159,28 @@ class StartingBonusView(View):
         await self.interaction.edit_original_response(
             content=message_content, view=self)
         del message_content
-        self.stop()  # Probably needed for when we call this function manually
+
+    async def _scheduled_task(self,
+                              item: Item[View],
+                              interaction: Interaction) -> None:
+        try:
+            if interaction.data is not None:
+                item._refresh_state(  # type: ignore
+                    interaction, interaction.data)  # type: ignore
+
+            allow: bool = (await item.interaction_check(interaction) and
+                           await self.interaction_check(interaction))
+            if not allow:
+                return
+
+            # Commented out code that restarts the timeout on click
+            # if self.timeout:
+            #     self.__timeout_expiry = time.monotonic() + self.timeout
+
+            await item.callback(interaction)
+        except Exception as e:
+            return await self.on_error(interaction, e, item)
+
 # endregion
 
 # region Grifter Suppliers
